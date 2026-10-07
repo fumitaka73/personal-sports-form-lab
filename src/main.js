@@ -1,8 +1,9 @@
 import './style.css';
-import { listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis } from './storage.js';
+import { listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis, commitSession, setSetting } from './storage.js';
 import { analyzeVideo, seekVideo } from './pose.js';
-import { compareAnalyses, validatePhases } from './metrics.js';
-import { generateFeedback } from './feedback.js';
+import { validatePhases } from './metrics.js';
+import { reviewShot } from './shot-engine.js';
+import { detectSessionShots, summarizeSession } from './session.js';
 import { evaluateCheckpoints } from './checkpoints.js';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -10,12 +11,13 @@ const date = value => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', ti
 const shotLabels = { jump: 'ジャンプシュート', set: 'セットシュート', free: 'フリースロー' };
 const cameraLabels = { front: '正面', side: '横', diagonal: '45度' };
 const confidenceLabels = { High: '高（High）', Medium: '中（Medium）', Low: '低（精度低・Low）' };
+let sessions = [], activeSession = null, sessionShotResult = null;
 let videos = [], results = [], referenceId = null, activePage = 'good', activeResult = null;
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
 app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.5</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
-<nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">02 新しいシュート</button><button data-page="results">03 比較結果</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
+<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.6 · SINGLE SHOT + SESSION</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
+<nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="results">03 比較結果</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
 const screen = document.querySelector('#screen');
@@ -32,6 +34,7 @@ function render() {
   clearScreen();
   document.querySelectorAll('[data-page]').forEach(button => { button.classList.toggle('active', button.dataset.page === activePage); button.setAttribute('aria-current', button.dataset.page === activePage ? 'page' : 'false'); });
   if (activePage === 'good' || activePage === 'analyze') renderUpload(activePage === 'good');
+  else if (activePage === 'session') renderSession();
   else if (activePage === 'results') renderResult();
   else if (activePage === 'history') renderHistory();
   else renderLibrary();
@@ -138,8 +141,8 @@ function renderUpload(isReference) {
       let result;
       if (!isReference) {
         onProgress('Good Formと比較し、計測値からフィードバックを生成しています', 95);
-        const comparison = compareAnalyses(good.analysis, analysis, good, video);
-        result = { id: crypto.randomUUID(), referenceVideoId: good.id, newVideoId: video.id, referenceTitle: good.title, newTitle: video.title, referenceMeta: { shotType: good.shotType, cameraAngle: good.cameraAngle, hand: good.hand }, newMeta: metadata, referenceAnalysis: good.analysis, newAnalysis: analysis, comparison, checkpointReview: evaluateCheckpoints(analysis, metadata, good.analysis, good), feedback: generateFeedback(comparison), createdAt: Date.now() };
+        const review = reviewShot(good.analysis, analysis, good, video);
+        result = { id: crypto.randomUUID(), referenceVideoId: good.id, newVideoId: video.id, referenceTitle: good.title, newTitle: video.title, referenceMeta: { shotType: good.shotType, cameraAngle: good.cameraAngle, hand: good.hand }, newMeta: metadata, referenceAnalysis: good.analysis, newAnalysis: analysis, ...review, createdAt: Date.now() };
       }
       await commitAnalysis(video, isReference ? video.id : referenceId, result);
       videos = [video, ...videos.filter(v => v.id !== video.id)];
@@ -157,7 +160,7 @@ function renderUpload(isReference) {
   if (isReference && good) { existingSelect.value = good.id; selectVideo(good); }
 }
 function renderResult() {
-  const result = results.find(r => r.id === activeResult) ?? results[0];
+  const result = sessionShotResult?.id === activeResult ? sessionShotResult : results.find(r => r.id === activeResult) ?? results[0];
   if (!result) { screen.innerHTML = '<div class="panel empty"><h2>比較結果はまだありません。</h2><p>Good Formを登録して、新しいシュートを分析してください。</p></div>'; return; }
   activeResult = result.id;
   const { comparison, feedback } = result;
@@ -241,8 +244,65 @@ function setupComparison(result) {
   players.forEach(v => { v.addEventListener('pause', () => { if (syncing) stop(); }); v.addEventListener('seeking', () => { if (syncing && !correcting) stop(); }); v.addEventListener('error', () => message('動画を再生できません。対応したブラウザで開いてください。', true)); });
   tick(); cleanup = () => { disposed = true; stop(); cancelAnimationFrame(raf); };
 }
+function sessionHistory(){
+  return `<section class="panel"><h2>Session履歴</h2>${sessions.length?sessions.map(s=>`<p>${date(s.createdAt)} · ${escape(s.title)} · ${s.shots.length}本 <button class="secondary" data-session="${escape(s.id)}">Sessionを見る</button> <button class="delete" data-delete-session="${escape(s.id)}">削除</button></p>`).join(''):'<p>Sessionの分析結果はここに保存されます。</p>'}</section>`;
+}
+function bindSessionLinks(){
+  screen.querySelectorAll('[data-session]').forEach(b=>b.onclick=()=>{activeSession=b.dataset.session;navigate('session');});
+  screen.querySelectorAll('[data-delete-session]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('このSession結果を削除しますか？動画は残ります。'))return;
+    try{const next=sessions.filter(s=>s.id!==b.dataset.deleteSession);await setSetting('sessions',next);sessions=next;render();}catch{message('Session履歴を削除できませんでした。',true);}
+  });
+}
+function renderSession(){
+  const good=reference();
+  const saved=sessions.find(s=>s.id===activeSession);
+  if(saved){renderSessionSummary(saved);return;}
+  if(!good?.analysis){screen.innerHTML='<section class="panel"><h2>Session</h2><p>まずGood Formで基準のシュートを登録してください。</p><button class="primary" id="session-good">Good Form</button></section>';document.querySelector('#session-good').onclick=()=>navigate('good');return;}
+  screen.innerHTML=`<section class="panel"><p class="eyebrow">SESSION · MULTIPLE SHOTS</p><h2>練習動画を分析</h2><p>長い動画からシュート候補を検出し、1本ずつSingle Shotと同じエンジンでGood Formと比較します。</p><p class="instruction">10分以内・1人の練習動画向けです。12フレーム/秒で全体を走査してから各候補を再分析するため、処理に時間がかかります。シュートの見逃しや誤検出があります。得点成功・失敗の判定は行いません。</p><label class="upload">＋ 練習動画を選ぶ<input id="session-upload" type="file" accept="video/*"></label><p id="session-filename"></p><video id="session-preview" controls playsinline hidden></video><form id="session-form"><label class="field">シュート種別<select id="session-type">${options(shotLabels,good.shotType)}</select></label><label class="field">撮影角度<select id="session-angle">${options(cameraLabels,good.cameraAngle)}</select></label><label class="field">シュートする手<select id="session-hand"><option value="right"${good.hand==='right'?' selected':''}>右手</option><option value="left"${good.hand==='left'?' selected':''}>左手</option></select></label><button class="primary" id="session-run" disabled>Sessionを分析</button><div id="session-progress-area" hidden><progress id="session-progress" max="100"></progress><p id="session-progress-text" role="status"></p><button class="secondary" type="button" id="session-cancel">キャンセル</button></div></form><p class="fineprint">ボール離れ、または手首上昇・肘伸展を候補にします。無検出時は架空のシュートを生成しません。Single Shotでは手動指定・低精度の分析も引き続き利用できます。</p></section>`;
+  const player=document.querySelector('#session-preview'),upload=document.querySelector('#session-upload'),run=document.querySelector('#session-run');let file;
+  upload.onchange=()=>{file=upload.files[0];if(!file)return;run.disabled=true;player.hidden=false;player.src=url(file);player.load();document.querySelector('#session-filename').textContent=file.name;};
+  player.onloadeddata=()=>{run.disabled=!Number.isFinite(player.duration)||player.duration<=0||player.duration>600;if(run.disabled)message('10分以内の再生可能な動画を選んでください。',true);};
+  player.onerror=()=>{run.disabled=true;message('この動画を再生できません。MP4（H.264）またはWebMをお試しください。',true);};
+  document.querySelector('#session-form').onsubmit=async event=>{
+    event.preventDefault();if(busy||!file)return;
+    const meta={shotType:document.querySelector('#session-type').value,cameraAngle:document.querySelector('#session-angle').value,hand:document.querySelector('#session-hand').value,goalDirection:'unknown'};
+    busy=true;controller=new AbortController();const signal=controller.signal;let completed=false;
+    const controls=[...screen.querySelectorAll('input,select,button')].filter(c=>c.id!=='session-cancel');controls.forEach(c=>c.disabled=true);document.querySelectorAll('[data-page]').forEach(c=>c.disabled=true);player.controls=false;
+    document.querySelector('#session-progress-area').hidden=false;document.querySelector('#session-cancel').onclick=()=>controller.abort();
+    const progress=(text,value)=>{document.querySelector('#session-progress-text').textContent=text;document.querySelector('#session-progress').value=value;};
+    try{
+      const scan=await analyzeVideo(player,null,meta.hand,(text,value)=>progress(`全体の検出：${text}`,value*0.5),signal,true,{session:true});
+      const candidates=detectSessionShots(scan.frames,meta.hand,scan.aspect,scan.range),shots=[];
+      for(let i=0;i<candidates.length;i++){
+        const detection=candidates[i];
+        // Re-run the exact Single Shot analyzer on each window, with fresh model state.
+        const analysis=await analyzeVideo(player,detection.phases,meta.hand,(text,value)=>progress(`Shot #${i+1}/${candidates.length}：${text}`,50+45*(i+value/100)/candidates.length),signal,true,{detection});
+        shots.push({number:i+1,newAnalysis:analysis,...reviewShot(good.analysis,analysis,good,meta)});
+      }
+      if(signal.aborted)throw new DOMException('キャンセル','AbortError');
+      const video={id:crypto.randomUUID(),blob:file,title:file.name,notes:'',createdAt:Date.now(),...meta,mode:'session'};
+      const session={id:crypto.randomUUID(),videoId:video.id,title:file.name,referenceVideoId:good.id,referenceTitle:good.title,referenceAnalysis:good.analysis,referenceMeta:{shotType:good.shotType,cameraAngle:good.cameraAngle,hand:good.hand},metadata:meta,shots,summary:summarizeSession(shots),createdAt:Date.now()};
+      await commitSession(video,[session,...sessions]);videos.unshift(video);sessions.unshift(session);activeSession=session.id;completed=true;
+    }catch(error){message(error.name==='AbortError'?'分析をキャンセルしました。結果は保存していません。':error.name==='QuotaExceededError'?'保存容量が不足しています。不要な記録を削除してください。':error.message,true);}
+    finally{busy=false;controller=null;document.querySelectorAll('[data-page]').forEach(c=>c.disabled=false);if(completed)render();else{controls.forEach(c=>c.disabled=false);player.controls=true;document.querySelector('#session-progress-area').hidden=true;}}
+  };
+}
+function renderSessionSummary(session){
+  const summary=session.summary;
+  const percent=value=>Number.isFinite(value)?`${value.toFixed(1)}%`:'未算出';
+  screen.innerHTML=`<section class="panel"><div class="panel-heading"><div><p class="eyebrow">SESSION SUMMARY</p><h2>${escape(session.title)}</h2></div><button class="secondary" id="new-session">別のSessionを分析</button></div><p>Good Form：${escape(session.referenceTitle)} · ${date(session.createdAt)}</p><div class="metric-grid"><article class="metric-card"><h3>検出候補</h3><strong>${summary.count}本</strong><p>採点可能 ${summary.scoredCount}本</p></article><article class="metric-card"><h3>平均 Form Match</h3><strong>${percent(summary.average)}</strong></article><article class="metric-card"><h3>最高 Form Match</h3><strong>${percent(summary.best)}</strong></article><article class="metric-card"><h3>後半 − 前半</h3><strong>${Number.isFinite(summary.change)?`${summary.change>0?'+':''}${summary.change.toFixed(1)}pt`:'未算出'}</strong><p>本数で前半・後半を分けた平均の差</p></article></div><p class="warning">候補の検出・リリース時刻は推定です。誤検出や見逃しを動画で確認してください。精度低のスコアも参考値として含み、未算出は平均から除きます。</p>${summary.count?`<div class="table-scroll"><table><thead><tr><th>Shot</th><th>リリース候補</th><th>Form Match</th><th>信頼度</th><th>結果</th></tr></thead><tbody>${session.shots.map((s,i)=>`<tr><td>#${s.number}</td><td>${s.newAnalysis.phases.release.toFixed(2)}秒 · ${s.newAnalysis.phaseSource==='ball'?'ボール':'姿勢推定'}</td><td>${percent(s.comparison.overall)}</td><td>${confidenceLabels[s.comparison.confidence]}</td><td><button class="secondary" data-session-shot="${i}">詳細・比較再生</button></td></tr>`).join('')}</tbody></table></div><p class="fineprint">各行を時系列に並べたスコア推移です。撮影条件や検出精度が変わると点数も変わります。</p>`:'<p>シュート候補を検出できませんでした。Single Shotで区間を指定して分析するか、撮影条件を変えて再試行してください。</p>'}</section>`;
+  document.querySelector('#new-session').onclick=()=>{activeSession=null;render();};
+  screen.querySelectorAll('[data-session-shot]').forEach(b=>b.onclick=()=>{
+    const shot=session.shots[Number(b.dataset.sessionShot)];
+    const transient={...shot,id:`session-${session.id}-${shot.number}`,referenceVideoId:session.referenceVideoId,newVideoId:session.videoId,referenceTitle:session.referenceTitle,newTitle:`${session.title} / Shot #${shot.number}`,referenceMeta:session.referenceMeta,newMeta:session.metadata,referenceAnalysis:session.referenceAnalysis,createdAt:session.createdAt};
+    sessionShotResult=transient;activeResult=transient.id;navigate('results');
+  });
+}
 function renderHistory() {
   screen.innerHTML = `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">YOUR TRAINING RECORDS</p><h2>分析履歴</h2></div><span class="badge">${results.length} 件</span></div>${!results.length ? '<p class="instruction">新しいシュートを分析すると、ここに記録されます。</p>' : `<div class="table-scroll"><table><thead><tr><th>日時・動画</th><th>シュート種別</th><th>Form Match</th><th>信頼度</th><th>操作</th></tr></thead><tbody>${results.map(r => `<tr><td>${date(r.createdAt)}<small>${escape(r.newTitle)}</small></td><td>${shotLabels[r.newMeta.shotType]}</td><td>${r.comparison.overall === null ? '—' : `${r.comparison.overall}%`}</td><td>${confidenceLabels[r.comparison.confidence]}</td><td><button class="secondary" data-result="${r.id}">結果を見る</button> <button class="delete" data-delete-result="${r.id}">削除</button></td></tr>`).join('')}</tbody></table></div>`}<p class="fineprint">履歴は分析時点の基準と計測値を保存します。別のGood Form・撮影角度・分析版の点数は、そのまま比較しないでください。</p></section>`;
+  screen.insertAdjacentHTML('beforeend', sessionHistory());
+  bindSessionLinks();
   screen.querySelectorAll('[data-result]').forEach(b => b.onclick = () => { activeResult = b.dataset.result; navigate('results'); });
   screen.querySelectorAll('[data-delete-result]').forEach(b => b.onclick = async () => {
     if (!confirm('この分析結果を削除しますか？動画は残ります。')) return;
@@ -265,7 +325,7 @@ function renderLibrary() {
       catch { message('メモを保存できませんでした。', true); }
     };
     document.querySelector('#delete-video').onclick = async () => {
-      if (video.id === referenceId || results.some(r => r.newVideoId === video.id || r.referenceVideoId === video.id)) { message('この動画はGood Formまたは分析履歴で使用中です。基準を変更し、関連する履歴を削除してから動画を削除できます。', true); return; }
+      if (video.id === referenceId || results.some(r => r.newVideoId === video.id || r.referenceVideoId === video.id) || sessions.some(s=>s.videoId===video.id||s.referenceVideoId===video.id)) { message('この動画はGood Formまたは分析履歴で使用中です。基準を変更し、関連する履歴を削除してから動画を削除できます。', true); return; }
       if (!confirm('この動画とメモを削除しますか？取り消せません。')) return;
       try { await deleteVideo(video.id); videos = videos.filter(v => v.id !== video.id); render(); message('動画を削除しました。'); }
       catch { message('動画を削除できませんでした。', true); }
@@ -276,8 +336,8 @@ document.querySelectorAll('[data-page]').forEach(button => button.onclick = () =
 window.addEventListener('beforeunload', event => { if (busy || noteDirty) { event.preventDefault(); event.returnValue = ''; } });
 window.addEventListener('pagehide', () => { controller?.abort(); cleanup(); });
 try {
-  const [savedVideos, savedResults, savedReference] = await Promise.all([listVideos(), listResults(), getSetting('referenceId')]);
-  videos = savedVideos.sort((a,b) => b.createdAt - a.createdAt); results = savedResults.sort((a,b) => b.createdAt - a.createdAt); referenceId = savedReference?.value ?? null; render();
+  const [savedVideos, savedResults, savedReference, savedSessions] = await Promise.all([listVideos(), listResults(), getSetting('referenceId'), getSetting('sessions')]);
+  videos = savedVideos.sort((a,b) => b.createdAt - a.createdAt); results = savedResults.sort((a,b) => b.createdAt - a.createdAt); referenceId = savedReference?.value ?? null; sessions=savedSessions?.value ?? []; render();
 } catch (error) {
   screen.innerHTML = '<div class="panel empty"><h2>ブラウザの保存機能を利用できません</h2><p>別のタブを閉じ、通常のブラウザウィンドウで開き直してください。</p></div>';
   document.querySelectorAll('[data-page]').forEach(b => b.disabled = true); message(error.message, true);

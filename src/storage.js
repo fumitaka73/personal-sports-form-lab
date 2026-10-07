@@ -37,3 +37,13 @@ export async function commitAnalysis(video, referenceId, result = null) {
     tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   });
 }
+// Persist the original session video and its per-shot results together.
+export async function commitSession(video, sessions) {
+  const db=await database;
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(['videos','settings'],'readwrite');
+    tx.objectStore('videos').put(video);
+    tx.objectStore('settings').put({id:'sessions',value:sessions});
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+  });
+}

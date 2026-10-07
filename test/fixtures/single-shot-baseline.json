@@ -1,0 +1,643 @@
+{
+  "metrics": {
+    "kneeArmTiming": 0.08333333333333337,
+    "torsoLean": 0,
+    "bodyOffset": 0,
+    "verticalRise": 0.15712173153189513,
+    "elbowAngle": 163.10381510646053,
+    "shoulderAngle": 145.23833775775825,
+    "kneeAngle": 111.91967171988807,
+    "hipAngle": 175.5998843603259,
+    "armLead": 0.6666666666666667,
+    "wristPeakTiming": 0.08333333333333326,
+    "wristHeight": 1.3059714590964593,
+    "followWrist": 0.015102345494162927,
+    "followElbow": 0.06783282226699075
+  },
+  "comparison": {
+    "version": "basketball-0.5.0",
+    "overall": 95,
+    "confidence": "High",
+    "metrics": [
+      {
+        "key": "kneeArmTiming",
+        "group": "lower",
+        "label": "脚と腕の伸展タイミング差",
+        "unit": "動作比",
+        "tolerance": 0.4,
+        "weight": 1,
+        "temporal": true,
+        "refValue": 0.08333333333333337,
+        "value": 0.08333333333333337,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "torsoLean",
+        "group": "balance",
+        "label": "リリース付近の体幹の傾き",
+        "unit": "°",
+        "tolerance": 25,
+        "weight": 1,
+        "refValue": 0,
+        "value": 0,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "bodyOffset",
+        "group": "balance",
+        "label": "足元に対する上体のずれ",
+        "unit": "胴長比",
+        "tolerance": 0.7,
+        "weight": 1,
+        "refValue": 0,
+        "value": 0,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "verticalRise",
+        "group": "balance",
+        "label": "腰の上下移動",
+        "unit": "胴長比",
+        "tolerance": 0.6,
+        "weight": 0.5,
+        "shotDependent": true,
+        "refValue": 0.15712173153189513,
+        "value": 0.15712173153189513,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "elbowAngle",
+        "group": "elbow",
+        "label": "リリース付近の肘角度",
+        "unit": "°",
+        "tolerance": 35,
+        "weight": 1,
+        "refValue": 149.30346760321325,
+        "value": 163.10381510646053,
+        "delta": 13.80034750324728,
+        "score": 60.570435705007775,
+        "excluded": null
+      },
+      {
+        "key": "shoulderAngle",
+        "group": "elbow",
+        "label": "リリース付近の肩角度",
+        "unit": "°",
+        "tolerance": 35,
+        "weight": 0.5,
+        "refValue": 145.23833775775825,
+        "value": 145.23833775775825,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "kneeAngle",
+        "group": "lower",
+        "label": "開始時の膝角度",
+        "unit": "°",
+        "tolerance": 35,
+        "weight": 0.5,
+        "shotDependent": true,
+        "refValue": 111.91967171988807,
+        "value": 111.91967171988807,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "hipAngle",
+        "group": "balance",
+        "label": "リリース付近の股関節角度",
+        "unit": "°",
+        "tolerance": 30,
+        "weight": 0.5,
+        "shotDependent": true,
+        "refValue": 175.5998843603259,
+        "value": 175.5998843603259,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "armLead",
+        "group": "release",
+        "label": "腕の伸展開始からリリースまで",
+        "unit": "動作比",
+        "tolerance": 0.4,
+        "weight": 1,
+        "temporal": true,
+        "refValue": 0.6666666666666667,
+        "value": 0.6666666666666667,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "wristPeakTiming",
+        "group": "release",
+        "label": "手首が最高点になるタイミング",
+        "unit": "動作比",
+        "tolerance": 0.35,
+        "weight": 1,
+        "temporal": true,
+        "refValue": 0.08333333333333326,
+        "value": 0.08333333333333326,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "wristHeight",
+        "group": "release",
+        "label": "肩からの手首の高さ",
+        "unit": "胴長比",
+        "tolerance": 0.6,
+        "weight": 0.5,
+        "refValue": 1.3059714590964593,
+        "value": 1.3059714590964593,
+        "delta": 0,
+        "score": 100,
+        "excluded": null
+      },
+      {
+        "key": "followWrist",
+        "group": "follow",
+        "label": "フォロースルー中の手首の揺れ",
+        "unit": "胴長比",
+        "tolerance": 0.3,
+        "weight": 1,
+        "refValue": 0.015107839431573662,
+        "value": 0.015102345494162927,
+        "delta": -0.000005493937410734617,
+        "score": 99.99816868752976,
+        "excluded": null
+      },
+      {
+        "key": "followElbow",
+        "group": "follow",
+        "label": "フォロースルー中の肘角度の揺れ",
+        "unit": "°",
+        "tolerance": 20,
+        "weight": 1,
+        "refValue": 0.07877289139960524,
+        "value": 0.06783282226699075,
+        "delta": -0.010940069132614486,
+        "score": 99.94529965433692,
+        "excluded": null
+      }
+    ],
+    "groups": [
+      {
+        "key": "lower",
+        "label": "下半身のタイミング",
+        "weight": 0.2,
+        "score": 100
+      },
+      {
+        "key": "balance",
+        "label": "体のバランス",
+        "weight": 0.2,
+        "score": 100
+      },
+      {
+        "key": "elbow",
+        "label": "シュート側の肘",
+        "weight": 0.2,
+        "score": 73.71362380333852
+      },
+      {
+        "key": "release",
+        "label": "リリース動作",
+        "weight": 0.25,
+        "score": 100
+      },
+      {
+        "key": "follow",
+        "label": "フォロースルー",
+        "weight": 0.15,
+        "score": 99.97173417093333
+      }
+    ],
+    "warnings": [],
+    "angleMismatch": false,
+    "shotMismatch": false,
+    "usedMetricCount": 13
+  },
+  "feedback": {
+    "working": "脚と腕の伸展タイミング差はGood Formとの差が0.00動作比です（一致度100%）。",
+    "difference": "リリース付近の肘角度が最も大きく異なります。Good Form 149.30 → 今回 163.10°。",
+    "focus": [
+      "リリース付近で一時停止し、シュート側の肘の伸び具合をGood Formと見比べましょう。"
+    ]
+  },
+  "checkpoints": {
+    "version": "personal-checks-0.5.0",
+    "checks": [
+      {
+        "id": "dip",
+        "label": "1. ディップ：お腹・体に近い・緩いS字",
+        "parts": [
+          {
+            "key": "dipHeight",
+            "label": "お腹付近のディップ",
+            "value": -0.6399999999999999,
+            "score": 52,
+            "status": "estimated",
+            "target": {
+              "min": -0.35,
+              "max": 0.05,
+              "tolerance": 0.6,
+              "unit": "胴長比"
+            },
+            "comment": "手首のディップが高めで、お腹付近まで下がっていません。",
+            "source": "代用指標による推定・精度低"
+          },
+          {
+            "key": "bodyDistance",
+            "label": "体に近いか",
+            "value": 0.6400000000000001,
+            "score": 55,
+            "status": "estimated",
+            "target": {
+              "min": 0,
+              "max": 0.35,
+              "tolerance": 0.65,
+              "unit": "胴長比"
+            },
+            "comment": "ディップ時の手首が体から離れる傾向です。",
+            "source": "代用指標による推定・精度低"
+          },
+          {
+            "label": "緩いS字の軌道",
+            "score": 60,
+            "status": "estimated",
+            "value": 0,
+            "source": "手首軌道の曲がり方による代用推定",
+            "comment": "手首軌道から緩いS字を確認できません。カメラ方向や動作区間にも左右されます。"
+          }
+        ],
+        "weight": 1,
+        "score": 56,
+        "status": "estimated",
+        "partial": false,
+        "comment": "手首のディップが高めで、お腹付近まで下がっていません。 ディップ時の手首が体から離れる傾向です。 手首軌道から緩いS字を確認できません。カメラ方向や動作区間にも左右されます。"
+      },
+      {
+        "id": "face",
+        "label": "2. 鼻・顔に近いセットとリリース",
+        "parts": [
+          {
+            "key": "faceDistance",
+            "label": "セット時の顔との距離",
+            "value": 0.6835202996254026,
+            "score": 41,
+            "status": "estimated",
+            "target": {
+              "min": 0,
+              "max": 0.3,
+              "tolerance": 0.65,
+              "unit": "胴長比"
+            },
+            "comment": "セット時に手首が顔から離れている傾向です。",
+            "source": "代用指標による推定・精度低"
+          },
+          {
+            "key": "bentElbow",
+            "label": "セット時に肘をかなり曲げる",
+            "value": 131.63353933657024,
+            "score": 57,
+            "status": "estimated",
+            "target": {
+              "min": 25,
+              "max": 95,
+              "tolerance": 85,
+              "unit": "°"
+            },
+            "comment": "顔に近づけた場面でも肘の曲がりが浅い傾向です。",
+            "source": "姿勢推定からの参考評価"
+          },
+          {
+            "key": "releaseHeight",
+            "label": "リリース位置が高すぎないか",
+            "value": 2.095238095238096,
+            "score": 0,
+            "status": "estimated",
+            "target": {
+              "min": -0.25,
+              "max": 0.15,
+              "tolerance": 0.55,
+              "unit": "胴長比"
+            },
+            "comment": "推定リリース位置（手首）が鼻より高すぎる傾向です。鼻付近という指定目標より上にあります。",
+            "source": "代用指標による推定・精度低",
+            "note": "ボールが未追跡のため手首を代用します。鼻付近は利用者が指定した目標です。"
+          },
+          {
+            "key": "noseDistance",
+            "label": "鼻のあたりでリリースできているか",
+            "value": 2.184775189896088,
+            "score": 0,
+            "status": "estimated",
+            "target": {
+              "min": 0,
+              "max": 0.25,
+              "tolerance": 0.65,
+              "unit": "胴長比"
+            },
+            "comment": "リリース付近の手首が鼻から離れています。高さに加えて、顔との距離も確認してください。",
+            "source": "代用指標による推定・精度低",
+            "note": "ボールが未追跡のため手首を代用します。鼻付近は利用者が指定した目標です。"
+          }
+        ],
+        "weight": 3,
+        "score": 25,
+        "status": "estimated",
+        "partial": false,
+        "comment": "セット時に手首が顔から離れている傾向です。 顔に近づけた場面でも肘の曲がりが浅い傾向です。 推定リリース位置（手首）が鼻より高すぎる傾向です。鼻付近という指定目標より上にあります。 リリース付近の手首が鼻から離れています。高さに加えて、顔との距離も確認してください。"
+      },
+      {
+        "id": "arm",
+        "label": "3. 内側への入り・ワイパー",
+        "parts": [
+          {
+            "label": "腕が内側に入っていないか",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "横動画では内側への入りを読み取れません。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          },
+          {
+            "label": "ワイパーのような横振れ",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "腕の横振れを評価できる正面の場面が不足しています。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          }
+        ],
+        "weight": 1,
+        "score": 50,
+        "status": "unrated",
+        "partial": true,
+        "comment": "未評価です。50点は表示用の仮置きで、良い・悪いの判定ではありません。"
+      },
+      {
+        "id": "shoulders",
+        "label": "4. 肩の水平・右肩の出",
+        "parts": [
+          {
+            "label": "肩は左右まっすぐか",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "横からの映像では左右の肩の水平を判定できません。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          },
+          {
+            "label": "右肩が前に出ていないか",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "この撮影角度では右肩の前後差を評価できません。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）",
+            "note": "モデルの奥行き推定を代用。カメラへの体の向きにも左右されます。"
+          }
+        ],
+        "weight": 1,
+        "score": 50,
+        "status": "unrated",
+        "partial": true,
+        "comment": "未評価です。50点は表示用の仮置きで、良い・悪いの判定ではありません。"
+      },
+      {
+        "id": "relax",
+        "label": "5. リラックス・力み（滑らかさの代用）",
+        "parts": [
+          {
+            "key": "abruptness",
+            "label": "手首の動きの滑らかさ",
+            "value": 0.6087892579274284,
+            "score": 100,
+            "status": "estimated",
+            "target": {
+              "min": 0,
+              "max": 12,
+              "tolerance": 45,
+              "unit": "胴長/秒²"
+            },
+            "comment": "手首の動きの急変は小さめです。ただし筋肉の力み・リラックス自体は判定できません。",
+            "source": "代用指標による推定・精度低"
+          }
+        ],
+        "weight": 1,
+        "score": 100,
+        "status": "estimated",
+        "partial": false,
+        "comment": "計測できた範囲では、指定した目標に近い動きです。"
+      },
+      {
+        "id": "base",
+        "label": "6. 狭めの足幅・反り腰の兆候",
+        "parts": [
+          {
+            "label": "足幅は狭めか",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "足元または正面の肩幅が見えず、足幅は評価できません。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          },
+          {
+            "label": "反り腰の兆候",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "肩・腰・顔の向きが読み取れず、反り腰の代用評価もできません。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）",
+            "note": "横動画の肩と骨盤の前後差を代用。骨盤傾斜・腰椎の反り・痛みは計測していません。"
+          }
+        ],
+        "weight": 3,
+        "score": 50,
+        "status": "unrated",
+        "partial": true,
+        "comment": "未評価です。50点は表示用の仮置きで、良い・悪いの判定ではありません。"
+      },
+      {
+        "id": "hold",
+        "label": "7. ボール持ち・手の接触",
+        "parts": [
+          {
+            "label": "シュート側寄りの持ち位置",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "ボール位置は追跡していません。手首の左右位置も読み取れません。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          },
+          {
+            "label": "乗せすぎになっていないか",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "ボールと指の接触を検出していないため、乗せすぎは未評価です。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          },
+          {
+            "label": "手がべたっとついていないか",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "手のひらの接触面は姿勢推定では分からず、未評価です。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          }
+        ],
+        "weight": 1,
+        "score": 50,
+        "status": "unrated",
+        "partial": true,
+        "comment": "未評価です。50点は表示用の仮置きで、良い・悪いの判定ではありません。"
+      },
+      {
+        "id": "follow",
+        "label": "8. リリース後の指の方向・右側への流れ",
+        "parts": [
+          {
+            "label": "ゴール方向への手の向き（人差し指を代用）",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "中指は検出していません。ゴールの画面上の方向が未指定、または代用する人差し指が見えず未評価です。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          },
+          {
+            "label": "中指がゴールを向いているか",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "中指とゴールの位置は直接検出していないため、未評価です。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          },
+          {
+            "label": "シュート側への流れ",
+            "score": 50,
+            "status": "unrated",
+            "value": null,
+            "comment": "手首の移動方向を読み取れる正面の場面が不足しています。",
+            "source": "未評価・仮置き50（映像からの推定値ではありません）"
+          }
+        ],
+        "weight": 1,
+        "score": 50,
+        "status": "unrated",
+        "partial": true,
+        "comment": "未評価です。50点は表示用の仮置きで、良い・悪いの判定ではありません。"
+      }
+    ],
+    "mandatory": [
+      {
+        "key": "releaseHeight",
+        "label": "リリース位置が高すぎないか",
+        "value": 2.095238095238096,
+        "score": 0,
+        "status": "estimated",
+        "target": {
+          "min": -0.25,
+          "max": 0.15,
+          "tolerance": 0.55,
+          "unit": "胴長比"
+        },
+        "comment": "推定リリース位置（手首）が鼻より高すぎる傾向です。鼻付近という指定目標より上にあります。",
+        "source": "代用指標による推定・精度低",
+        "note": "ボールが未追跡のため手首を代用します。鼻付近は利用者が指定した目標です。"
+      },
+      {
+        "key": "noseDistance",
+        "label": "鼻のあたりでリリースできているか",
+        "value": 2.184775189896088,
+        "score": 0,
+        "status": "estimated",
+        "target": {
+          "min": 0,
+          "max": 0.25,
+          "tolerance": 0.65,
+          "unit": "胴長比"
+        },
+        "comment": "リリース付近の手首が鼻から離れています。高さに加えて、顔との距離も確認してください。",
+        "source": "代用指標による推定・精度低",
+        "note": "ボールが未追跡のため手首を代用します。鼻付近は利用者が指定した目標です。"
+      },
+      {
+        "label": "反り腰の兆候",
+        "score": 50,
+        "status": "unrated",
+        "value": null,
+        "comment": "肩・腰・顔の向きが読み取れず、反り腰の代用評価もできません。",
+        "source": "未評価・仮置き50（映像からの推定値ではありません）",
+        "note": "横動画の肩と骨盤の前後差を代用。骨盤傾斜・腰椎の反り・痛みは計測していません。"
+      }
+    ],
+    "overall": 46,
+    "status": "estimated",
+    "evaluatedCount": 3,
+    "issues": [
+      {
+        "label": "リリース位置が高すぎないか",
+        "score": 0,
+        "comment": "推定リリース位置（手首）が鼻より高すぎる傾向です。鼻付近という指定目標より上にあります。",
+        "priority": 0
+      },
+      {
+        "label": "鼻のあたりでリリースできているか",
+        "score": 0,
+        "comment": "リリース付近の手首が鼻から離れています。高さに加えて、顔との距離も確認してください。",
+        "priority": 0
+      },
+      {
+        "label": "セット時の顔との距離",
+        "score": 41,
+        "comment": "セット時に手首が顔から離れている傾向です。",
+        "priority": 1
+      },
+      {
+        "label": "お腹付近のディップ",
+        "score": 52,
+        "comment": "手首のディップが高めで、お腹付近まで下がっていません。",
+        "priority": 1
+      },
+      {
+        "label": "体に近いか",
+        "score": 55,
+        "comment": "ディップ時の手首が体から離れる傾向です。",
+        "priority": 1
+      },
+      {
+        "label": "セット時に肘をかなり曲げる",
+        "score": 57,
+        "comment": "顔に近づけた場面でも肘の曲がりが浅い傾向です。",
+        "priority": 1
+      },
+      {
+        "label": "緩いS字の軌道",
+        "score": 60,
+        "comment": "手首軌道から緩いS字を確認できません。カメラ方向や動作区間にも左右されます。",
+        "priority": 1
+      }
+    ],
+    "notes": [
+      "利用者が指定した目標への参考スコアです。Good Form一致度とは別です。",
+      "全て姿勢推定または代用指標です。未評価の50点は仮置きで、総合点には含めません。",
+      "ボール、腰椎、中指、筋肉の緊張、手の接触を直接計測した結果ではありません。"
+    ]
+  }
+}

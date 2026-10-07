@@ -36,7 +36,7 @@ function boundaries(rows,release,range){
   if(!(start<release&&release<end))return null;
   return {start,release,end};
 }
-export function detectShotPhases(frames,hand,aspect,range){
+export function shotCandidates(frames,hand,aspect,range,includePose=false){
   const rows=frames.map(f=>row(f,hand,aspect)).filter(Boolean);
   const candidates=[];
   for(let i=2;i<rows.length-1;i++){
@@ -54,11 +54,10 @@ export function detectShotPhases(frames,hand,aspect,range){
       candidates.push({phases,source:'ball',confidence:'Medium',releaseWindow:{from:contact.time,to:away.time},strength:Math.min(...group.map(r=>r.ball.confidence)),reason:'手の近くにあった丸いオレンジ・茶色の領域が、連続フレームで手から離れて上昇した時刻を候補にしました。2Dの重なりからの推定で、実際の指離れの確定ではありません。'});
     }
   }
-  if(candidates.length){
-    const selected=candidates.sort((a,b)=>b.strength-a.strength||a.phases.release-b.phases.release)[0];
-    return {...selected,candidateCount:candidates.length,ballTrackedFrames:frames.filter(f=>f.ball).length};
+  const poseCandidates=[];
+  if(candidates.length&&!includePose){
+    return candidates.map(selected=>({...selected,candidateCount:candidates.length,ballTrackedFrames:frames.filter(f=>f.ball).length}));
   }
-  let best=null;
   for(let i=1;i<rows.length;i++){
     const a=rows[i-1],b=rows[i],dt=b.time-a.time;
     if(dt<=0||dt>0.25||b.wristHeight< -0.4)continue;
@@ -67,8 +66,12 @@ export function detectShotPhases(frames,hand,aspect,range){
     if(rise<0.2&&elbowChange<3)continue;
     const strength=Math.max(0,elbowChange/dt)/180+Math.max(0,rise)*0.3;
     const release=Math.min(range.end-0.01,b.time+0.08),phases=boundaries(rows,release,range);
-    if(phases&&(!best||strength>best.strength))best={phases,strength};
+    if(phases)poseCandidates.push({phases,strength});
   }
-  if(best)return {...best,source:'pose',confidence:'Low',releaseWindow:null,candidateCount:0,ballTrackedFrames:frames.filter(f=>f.ball).length,reason:'ボール離れを確認できないため、手首の上昇と肘の伸展が大きい場面からリリースを推定しました。'};
+  return [...candidates,...poseCandidates.map(best=>({...best,source:'pose',confidence:'Low',releaseWindow:null,candidateCount:0,ballTrackedFrames:frames.filter(f=>f.ball).length,reason:'ボール離れを確認できないため、手首の上昇と肘の伸展が大きい場面からリリースを推定しました。'}))];
+}
+export function detectShotPhases(frames,hand,aspect,range){
+  const candidates=shotCandidates(frames,hand,aspect,range);
+  if(candidates.length)return candidates.sort((a,b)=>b.strength-a.strength||a.phases.release-b.phases.release)[0];
   return {phases:{start:range.start,release:(range.start+range.end)/2,end:range.end},source:'midpoint',confidence:'Low',releaseWindow:null,candidateCount:0,ballTrackedFrames:frames.filter(f=>f.ball).length,reason:'ボール離れ・シュート動作を読み取れなかったため、区間中央を仮設定しました。分析は続けます。'};
 }

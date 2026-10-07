@@ -24,8 +24,9 @@ export function seekVideo(video, time) {
   });
 }
 export async function analyzeVideo(video, phases, hand, onProgress, signal, phaseEstimated = false, options = {}) {
-  const scanRange = options.autoPhases ? { start: 0, release: Math.min(video.duration, 30) / 2, end: Math.min(video.duration, 30) } : phases;
-  validatePhases(scanRange, video.duration);
+  const scanRange = options.session ? {start:0,release:video.duration/2,end:video.duration} : options.autoPhases ? { start: 0, release: Math.min(video.duration, 30) / 2, end: Math.min(video.duration, 30) } : phases;
+  if(options.session){if(!Number.isFinite(video.duration)||video.duration<=0||video.duration>600)throw new Error('Sessionは10分以内の動画を選んでください。');}
+  else validatePhases(scanRange, video.duration);
   const checkCancel = () => { if (signal.aborted) throw new DOMException('分析をキャンセルしました。', 'AbortError'); };
   checkCancel(); onProgress('姿勢推定モデルを準備しています', 0);
   await loadPoseScript(); checkCancel();
@@ -61,7 +62,8 @@ export async function analyzeVideo(video, phases, hand, onProgress, signal, phas
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     checkCancel(); onProgress('シュート区間とリリース候補を計算しています', 90);
-    const automatic = options.autoPhases ? detectShotPhases(frames, hand, video.videoWidth / video.videoHeight, scanRange) : null;
+    if(options.session)return {frames,aspect:video.videoWidth/video.videoHeight,range:scanRange};
+    const automatic = options.detection ?? (options.autoPhases ? detectShotPhases(frames, hand, video.videoWidth / video.videoHeight, scanRange) : null);
     const selected = automatic?.phases ?? phases;
     const analyzedFrames = frames.filter(f => f.time >= selected.start - 0.001 && f.time <= selected.end + 0.001);
     const analysis = calculateMetrics(analyzedFrames, selected, hand, video.videoWidth / video.videoHeight, automatic ? automatic.source !== 'ball' : phaseEstimated);
