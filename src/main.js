@@ -3,6 +3,7 @@ import { listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResu
 import { analyzeVideo, seekVideo } from './pose.js';
 import { compareAnalyses, validatePhases } from './metrics.js';
 import { generateFeedback } from './feedback.js';
+import { evaluateCheckpoints } from './checkpoints.js';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const date = value => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -13,7 +14,7 @@ let videos = [], results = [], referenceId = null, activePage = 'good', activeRe
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
 app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.3</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
+<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.4</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
 <nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">02 新しいシュート</button><button data-page="results">03 比較結果</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
@@ -57,6 +58,7 @@ function renderUpload(isReference) {
     <form id="analysis-form"><label class="field">シュート種別<select id="shot-type">${options(shotLabels, good?.shotType ?? 'jump')}</select></label>
     <label class="field">撮影角度<select id="camera-angle">${options(cameraLabels, good?.cameraAngle ?? 'side')}</select></label>
     <label class="field">シュートする手<select id="hand"><option value="right"${good?.hand !== 'left' ? ' selected' : ''}>右手</option><option value="left"${good?.hand === 'left' ? ' selected' : ''}>左手</option></select></label>
+    <label class="field">ゴールの方向（画面上・任意）<select id="goal-direction"><option value="unknown">指定なし</option><option value="right">画面右</option><option value="left">画面左</option><option value="up">画面上</option></select></label>
     <label class="field">${isReference ? 'Good Formのメモ' : '今回のメモ'}<textarea id="notes" rows="4" placeholder="コーチからのコメントや撮影条件など"></textarea></label>
     <p id="condition-warning" class="warning" hidden></p><button type="submit" class="primary full" id="analyze-button" disabled>${isReference ? '分析してGood Formに設定' : 'Analyze · 分析する'}</button>
     <p class="fineprint">MediaPipeで姿勢を推定し、計測差から点数を計算します。助言は計測値に基づくルールで生成します。LLMは点数を作りません。</p>
@@ -77,6 +79,7 @@ function renderUpload(isReference) {
     if (video.shotType) document.querySelector('#shot-type').value = video.shotType;
     if (video.cameraAngle) document.querySelector('#camera-angle').value = video.cameraAngle;
     if (video.hand) document.querySelector('#hand').value = video.hand;
+    document.querySelector('#goal-direction').value = video.goalDirection ?? 'unknown';
     updateWarning();
   }
   preview.onloadeddata = () => {
@@ -112,7 +115,7 @@ function renderUpload(isReference) {
     event.preventDefault(); if (busy || !draft) return;
     const phases = Object.fromEntries(['start', 'release', 'end'].map(key => [key, document.querySelector(`#${key}`).value === '' ? NaN : Number(document.querySelector(`#${key}`).value)]));
     try { validatePhases(phases, preview.duration); } catch (error) { message(error.message, true); return; }
-    const metadata = { shotType: document.querySelector('#shot-type').value, cameraAngle: document.querySelector('#camera-angle').value, hand: document.querySelector('#hand').value };
+    const metadata = { shotType: document.querySelector('#shot-type').value, cameraAngle: document.querySelector('#camera-angle').value, hand: document.querySelector('#hand').value, goalDirection: document.querySelector('#goal-direction').value };
     const notes = document.querySelector('#notes').value;
     busy = true; controller = new AbortController(); const signal = controller.signal;
     document.querySelector('#progress-area').hidden = false;
@@ -129,7 +132,7 @@ function renderUpload(isReference) {
       if (!isReference) {
         onProgress('Good Formと比較し、計測値からフィードバックを生成しています', 95);
         const comparison = compareAnalyses(good.analysis, analysis, good, video);
-        result = { id: crypto.randomUUID(), referenceVideoId: good.id, newVideoId: video.id, referenceTitle: good.title, newTitle: video.title, referenceMeta: { shotType: good.shotType, cameraAngle: good.cameraAngle, hand: good.hand }, newMeta: metadata, referenceAnalysis: good.analysis, newAnalysis: analysis, comparison, feedback: generateFeedback(comparison), createdAt: Date.now() };
+        result = { id: crypto.randomUUID(), referenceVideoId: good.id, newVideoId: video.id, referenceTitle: good.title, newTitle: video.title, referenceMeta: { shotType: good.shotType, cameraAngle: good.cameraAngle, hand: good.hand }, newMeta: metadata, referenceAnalysis: good.analysis, newAnalysis: analysis, comparison, checkpointReview: evaluateCheckpoints(analysis, metadata, good.analysis, good), feedback: generateFeedback(comparison), createdAt: Date.now() };
       }
       await commitAnalysis(video, isReference ? video.id : referenceId, result);
       videos = [video, ...videos.filter(v => v.id !== video.id)];
@@ -151,8 +154,9 @@ function renderResult() {
   if (!result) { screen.innerHTML = '<div class="panel empty"><h2>比較結果はまだありません。</h2><p>Good Formを登録して、新しいシュートを分析してください。</p></div>'; return; }
   activeResult = result.id;
   const { comparison, feedback } = result;
+  const checkpointReview = result.checkpointReview ?? evaluateCheckpoints(result.newAnalysis, result.newMeta, result.referenceAnalysis, result.referenceMeta);
   const goodVideo = videos.find(v => v.id === result.referenceVideoId), newVideo = videos.find(v => v.id === result.newVideoId);
-  screen.innerHTML = `<section class="panel"><div class="result-top"><div><p class="eyebrow">FORM MATCH</p><div class="score">${comparison.overall ?? '—'}<span>${comparison.overall === null ? '' : '%'}</span></div><p class="instruction">自分のGood Formとの一致度。<br>シュートの絶対的な品質や成功率の点数ではありません。</p></div><div class="result-meta"><span class="badge">分析信頼度：${confidenceLabels[comparison.confidence]}</span><p>${date(result.createdAt)}<br>${shotLabels[result.newMeta.shotType]} / ${cameraLabels[result.newMeta.cameraAngle]}</p><p class="fineprint">信頼度は姿勢の検出率・比較項目数・撮影条件による目安です。</p></div></div>
+  screen.innerHTML = `<section class="panel">${renderCheckpointReview(checkpointReview)}<div class="result-top"><div><p class="eyebrow">FORM MATCH</p><div class="score">${comparison.overall ?? '—'}<span>${comparison.overall === null ? '' : '%'}</span></div><p class="instruction">自分のGood Formとの一致度。<br>シュートの絶対的な品質や成功率の点数ではありません。</p></div><div class="result-meta"><span class="badge">分析信頼度：${confidenceLabels[comparison.confidence]}</span><p>${date(result.createdAt)}<br>${shotLabels[result.newMeta.shotType]} / ${cameraLabels[result.newMeta.cameraAngle]}</p><p class="fineprint">信頼度は姿勢の検出率・比較項目数・撮影条件による目安です。</p></div></div>
     ${comparison.warnings.map(w => `<p class="warning">${escape(w)}</p>`).join('')}
     <p class="fineprint">計測できた比較項目：${comparison.usedMetricCount ?? comparison.metrics.filter(m => m.score !== null).length} / ${comparison.metrics.length}。不足する項目は採点しません。${comparison.overall === null ? ' 点数未算出でも、比較再生と履歴を利用できます。' : ''}</p><div class="metric-grid">${comparison.groups.map(g => `<article class="metric-card"><h3>${g.label}</h3><strong>${g.score === null ? '対象外' : `${Math.round(g.score)}%`}</strong><p>${g.score === null ? '比較できる指標なし' : 'Good Formへの一致度'}</p></article>`).join('')}</div>
     <div class="comparison-videos"><div><h3>GOOD FORM</h3><p class="filename">${escape(result.referenceTitle)}</p>${goodVideo ? `<div class="video-wrap"><video id="ref-player" controls playsinline src="${url(goodVideo.blob)}"></video><canvas id="ref-overlay" aria-hidden="true"></canvas></div>` : '<p>元の動画がありません。</p>'}<p class="fineprint">${shotLabels[result.referenceMeta.shotType]} / ${cameraLabels[result.referenceMeta.cameraAngle]}</p></div><div><h3>NEW SHOT</h3><p class="filename">${escape(result.newTitle)}</p>${newVideo ? `<div class="video-wrap"><video id="new-player" controls playsinline src="${url(newVideo.blob)}"></video><canvas id="new-overlay" aria-hidden="true"></canvas></div>` : '<p>元の動画がありません。</p>'}<p class="fineprint">${shotLabels[result.newMeta.shotType]} / ${cameraLabels[result.newMeta.cameraAngle]}</p></div></div>
@@ -162,6 +166,18 @@ function renderResult() {
     <div class="table-scroll"><table><thead><tr><th>指標</th><th>Good Form</th><th>今回</th><th>差</th><th>許容差 / 重み</th><th>一致度 / 除外理由</th></tr></thead><tbody>${comparison.metrics.map(m => `<tr><td>${m.label}<small>${m.unit}</small></td><td>${format(m.refValue)}</td><td>${format(m.value)}</td><td>${format(m.delta)}</td><td>${m.tolerance} / ${m.weight}</td><td>${m.excluded ? escape(m.excluded) : `${Math.round(m.score)}%`}</td></tr>`).join('')}</tbody></table></div></details>
     <p class="fineprint">助言は計測差から生成するルールベースのフィードバックです。医療・生体力学的な精度や、コーチの判断を代替するものではありません。映像と照らし合わせて確認してください。</p></section>`;
   if (goodVideo && newVideo) setupComparison(result);
+}
+function renderCheckpointReview(review) {
+  const badge = part => part.status === 'unrated' ? '未評価・仮置き' : '推定・参考評価';
+  const partHtml = part => `<li><div class="check-part-heading"><strong>${escape(part.label)}</strong><span>${part.score}/100 · ${badge(part)}</span></div><p>${escape(part.comment)}</p><p class="fineprint">${escape(part.source)}${part.note ? ' · ' + escape(part.note) : ''}</p>${part.target && Number.isFinite(part.value) ? `<p class="fineprint">計測値 ${part.value.toFixed(3)} ${escape(part.target.unit)} / 目標 ${part.target.min}〜${part.target.max} / 許容差 ${part.target.tolerance}</p>` : ''}</li>`;
+  return `<section class="checkpoint-section" aria-label="シュートの確認ポイント評価"><div class="panel-heading"><div><p class="eyebrow">PERSONAL SHOOTING CHECKPOINTS</p><h2>確認ポイントの評価</h2></div><div class="checkpoint-total"><strong>${review.overall}<small>/100</small></strong><span>${review.status === 'unrated' ? '未評価・仮置き50' : '指定目標への推定スコア'}</span></div></div>
+    <p class="instruction">鼻付近のリリースと姿勢など、指定された目標への参考評価です。下のGood Form一致度とは別のスコアです。</p>
+    <p class="warning">推定結果です。未評価の50点は便宜上の仮置きで、映像から推定した数値でも「平均的」という評価でもありません。未評価項目は総合点に含めません。</p>
+    <div class="mandatory-grid">${review.mandatory.map(part => `<article class="mandatory-card ${part.status === 'unrated' ? 'unrated' : ''}"><p class="eyebrow">必須チェック</p><h3>${escape(part.label)}</h3><strong>${part.score}<small>/100</small></strong><span class="check-status">${badge(part)}</span><p>${escape(part.comment)}</p><p class="fineprint">${escape(part.note ?? part.source)}</p></article>`).join('')}</div>
+    ${review.issues.length ? `<div class="checkpoint-focus"><h3>指定した目標との主な違い</h3><ul>${review.issues.slice(0,2).map(issue => `<li>${escape(issue.comment)}</li>`).join('')}</ul><p class="fineprint">上の推定を動画のリリース位置で確認し、1〜2点に絞って練習してください。</p></div>` : `<p class="instruction">${review.status === 'unrated' ? '映像から良い・悪いを判定できませんでした。下の比較再生で確認してください。' : '計測できた項目は指定した目標に近い範囲です。未評価の項目が適切だと確認できたわけではありません。'}</p>`}
+    <div class="checkpoint-grid">${review.checks.map(check => `<article class="checkpoint-card"><div class="check-card-heading"><h3>${escape(check.label)}</h3><strong>${check.score}<small>/100</small></strong></div><p class="check-status">${badge(check)}${check.partial ? ' · 一部は未評価' : ''}</p><p>${escape(check.comment)}</p><details><summary>項目別のスコア・理由</summary><ul class="check-parts">${check.parts.map(partHtml).join('')}</ul></details></article>`).join('')}</div>
+    <details class="metric-details"><summary>このチェック評価の採点方法</summary><p class="instruction">計測できた値が指定の目標範囲にあれば100点。範囲からの距離を許容差で割り、100 × (1 − 範囲外の距離 / 許容差)、最低0点で計算します。S字は手首の軌道に両方向の曲がりがあれば85点、確認できなければ60点という仮のルールです。各項目は評価できた小項目の平均です。総合は鼻・リリースと足幅・腰の分類を重み3、その他を1にして平均します。仮置き50点は平均に含めません。${review.evaluatedCount} / 8分類を代用指標で評価。基準は利用者指定の目標で、検証済みの競技標準ではありません。</p><p class="fineprint">評価版：${escape(review.version)}。筋肉の力み、腰椎の反り、手の接触、中指・ボールの軌道は直接測っていません。</p></details>
+    <hr class="check-divider"></section>`;
 }
 function format(value) { return Number.isFinite(value) ? value.toFixed(2) : '—'; }
 function setupComparison(result) {
