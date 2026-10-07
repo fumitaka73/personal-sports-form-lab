@@ -1,14 +1,19 @@
 {
   "name": "personal-sports-form-lab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "build": "node scripts/copy-pose-assets.js && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test",
+    "postinstall": "node scripts/copy-pose-assets.js"
   },
   "devDependencies": {
     "vite": "8.3.3"
+  },
+  "dependencies": {
+    "@mediapipe/pose": "0.5.1675469404"
   }
 }
