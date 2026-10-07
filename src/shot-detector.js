@@ -6,7 +6,7 @@ import {liveMetrics} from './live-metrics.js';
 export class ShotDetector{
  constructor({hand='right',aspect=1,live=false,range=null}={}){this.hand=hand;this.aspect=aspect;this.live=live;this.range=range;this.frames=[];this.history=[];this.count=0;this.lastRelease=-Infinity;this.lastEvaluation=-Infinity;this.previous=null;this.preparation=null;this.lastEvent=null;this.state='IDLE';this.signals={};}
  processFrame(timestamp,landmarks,ball=null,frameTime=null){
-  const time=frameTime??timestamp/1000;if(!Number.isFinite(time)||this.frames.at(-1)?.time>=time)return this.snapshot();
+  this.completed=[];const time=frameTime??timestamp/1000;if(!Number.isFinite(time)||this.frames.at(-1)?.time>=time)return this.snapshot();
   const frame={time,landmarks,ball};this.frames.push(frame);
   if(!this.live)return this.snapshot();
   this.frames=this.frames.filter(f=>f.time>=time-10);
@@ -29,7 +29,7 @@ export class ShotDetector{
     this.state='FOLLOW_THROUGH';
     // Wait for the detector's existing 0.8s post-release evidence window.
     if(time-release<.8)continue;
-    this.count++;this.lastRelease=release;this.lastEvent={number:this.count,at:time,...candidate};this.preparation=null;this.state='COMPLETE';
+    this.count++;this.lastRelease=release;this.lastEvent={number:this.count,at:time,...candidate};this.completed.push(this.lastEvent);this.preparation=null;this.state='COMPLETE';
    }
   }
   if(this.lastEvent&&time-this.lastEvent.at<.4)this.state='COMPLETE';
@@ -37,7 +37,7 @@ export class ShotDetector{
   this.previous=row;return this.snapshot();
  }
  detect(range=this.range){if(!this.frames.length)return [];return detectSessionShots(this.frames,this.hand,this.aspect,range??{start:this.frames[0].time,end:this.frames.at(-1).time});}
- snapshot(){return {state:this.state,count:this.count,signals:this.signals,event:this.lastEvent};}
+ snapshot(){return {state:this.state,count:this.count,signals:this.signals,event:this.lastEvent,events:this.completed??[]};}
 }
 export function detectSessionWithAdapter(frames,hand,aspect,range){
  const detector=new ShotDetector({hand,aspect,range});

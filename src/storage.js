@@ -47,3 +47,5 @@ export async function commitSession(video, sessions) {
     tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
   });
 }
+
+export const saveCoachSession = session => transact('results', 'readwrite', store => store.put(session));

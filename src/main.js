@@ -1,7 +1,8 @@
 import './style.css';
 import { videoTransform, POSE_CONNECTIONS } from './pose-coordinates.js';
+import {mountLiveCoach,coachSummaryHTML} from './live-coach.js';
 import { mountLivePose } from './live-pose.js';
-import { listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis, commitSession, setSetting } from './storage.js';
+import { saveCoachSession, listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis, commitSession, setSetting } from './storage.js';
 import { analyzeVideo, seekVideo } from './pose.js';
 import { validatePhases } from './metrics.js';
 import { reviewShot } from './shot-engine.js';
@@ -17,13 +18,14 @@ const date = value => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', ti
 const shotLabels = { jump: 'ジャンプシュート', set: 'セットシュート', free: 'フリースロー' };
 const cameraLabels = { front: '正面', side: '横', diagonal: '45度' };
 const confidenceLabels = { High: '高（High）', Medium: '中（Medium）', Low: '低（精度低・Low）' };
+let coachSessions = [];
 let sessions = [], activeSession = null, sessionShotResult = null;
 let videos = [], results = [], referenceId = null, activePage = 'good', activeResult = null;
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
 app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.9 · LIVE POSE v0.25 BETA</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
-<nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="live">Live Pose (Beta)</button><button data-page="results">03 比較結果</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
+<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.10 · LIVE COACH v0.3 BETA</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
+<nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="coach">Live Coach</button><button data-page="live">Live Pose (Beta)</button><button data-page="results">03 比較結果</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
 const screen = document.querySelector('#screen');
@@ -41,6 +43,7 @@ function render() {
   document.querySelectorAll('[data-page]').forEach(button => { button.classList.toggle('active', button.dataset.page === activePage); button.setAttribute('aria-current', button.dataset.page === activePage ? 'page' : 'false'); });
   if (activePage === 'good' || activePage === 'analyze') renderUpload(activePage === 'good');
   else if (activePage === 'session') renderSession();
+  else if (activePage === 'coach') cleanup=mountLiveCoach(screen,{videos,referenceId,onSave:async session=>{await saveCoachSession(session);coachSessions=[session,...coachSessions.filter(s=>s.id!==session.id)];}});
   else if (activePage === 'live') cleanup=mountLivePose(screen);
   else if (activePage === 'results') renderResult();
   else if (activePage === 'history') renderHistory();
@@ -335,6 +338,9 @@ function renderSessionSummary(session){
 function renderHistory() {
   screen.innerHTML = `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">YOUR TRAINING RECORDS</p><h2>分析履歴</h2></div><span class="badge">${results.length} 件</span></div>${!results.length ? '<p class="instruction">新しいシュートを分析すると、ここに記録されます。</p>' : `<div class="table-scroll"><table><thead><tr><th>日時・動画</th><th>シュート種別</th><th>Form Match</th><th>信頼度</th><th>操作</th></tr></thead><tbody>${results.map(r => `<tr><td>${date(r.createdAt)}<small>${escape(r.newTitle)}</small></td><td>${shotLabels[r.newMeta.shotType]}</td><td>${r.comparison.overall === null ? '—' : `${r.comparison.overall}%`}</td><td>${confidenceLabels[r.comparison.confidence]}</td><td><button class="secondary" data-result="${r.id}">結果を見る</button> <button class="delete" data-delete-result="${r.id}">削除</button></td></tr>`).join('')}</tbody></table></div>`}<p class="fineprint">履歴は分析時点の基準と計測値を保存します。別のGood Form・撮影角度・分析版の点数は、そのまま比較しないでください。</p></section>`;
   screen.insertAdjacentHTML('beforeend', sessionHistory());
+  screen.insertAdjacentHTML('beforeend',`<section class="panel"><h2>Live Coach履歴</h2>${coachSessions.map(s=>`<p>${date(s.createdAt)} · ${escape(s.goodFormReference.title)} · ${s.shots.length}本 <button class="secondary" data-coach="${s.id}">まとめを見る</button> <button class="delete" data-delete-coach="${s.id}">削除</button></p>`).join('')||'<p>まだ記録がありません。</p>'}</section>`);
+  screen.querySelectorAll('[data-coach]').forEach(b=>b.onclick=()=>{clearScreen();screen.innerHTML=coachSummaryHTML(coachSessions.find(s=>s.id===b.dataset.coach));});
+  screen.querySelectorAll('[data-delete-coach]').forEach(b=>b.onclick=async()=>{if(!confirm('このLive Coach履歴を削除しますか？'))return;try{await deleteResult(b.dataset.deleteCoach);coachSessions=coachSessions.filter(s=>s.id!==b.dataset.deleteCoach);render();}catch{message('Live Coach履歴を削除できませんでした。',true);}});
   bindSessionLinks();
   screen.querySelectorAll('[data-result]').forEach(b => b.onclick = () => { activeResult = b.dataset.result; navigate('results'); });
   screen.querySelectorAll('[data-delete-result]').forEach(b => b.onclick = async () => {
@@ -358,7 +364,7 @@ function renderLibrary() {
       catch { message('メモを保存できませんでした。', true); }
     };
     document.querySelector('#delete-video').onclick = async () => {
-      if (video.id === referenceId || results.some(r => r.newVideoId === video.id || r.referenceVideoId === video.id) || sessions.some(s=>s.videoId===video.id||s.referenceVideoId===video.id)) { message('この動画はGood Formまたは分析履歴で使用中です。基準を変更し、関連する履歴を削除してから動画を削除できます。', true); return; }
+      if (video.id === referenceId || results.some(r => r.newVideoId === video.id || r.referenceVideoId === video.id) || sessions.some(s=>s.videoId===video.id||s.referenceVideoId===video.id) || coachSessions.some(s=>s.goodFormReference.id===video.id)) { message('この動画はGood Formまたは分析履歴で使用中です。基準を変更し、関連する履歴を削除してから動画を削除できます。', true); return; }
       if (!confirm('この動画とメモを削除しますか？取り消せません。')) return;
       try { await deleteVideo(video.id); videos = videos.filter(v => v.id !== video.id); render(); message('動画を削除しました。'); }
       catch { message('動画を削除できませんでした。', true); }
@@ -370,7 +376,7 @@ window.addEventListener('beforeunload', event => { if (busy || noteDirty) { even
 window.addEventListener('pagehide', () => { controller?.abort(); cleanup(); });
 try {
   const [savedVideos, savedResults, savedReference, savedSessions] = await Promise.all([listVideos(), listResults(), getSetting('referenceId'), getSetting('sessions')]);
-  videos = savedVideos.sort((a,b) => b.createdAt - a.createdAt); results = savedResults.sort((a,b) => b.createdAt - a.createdAt); referenceId = savedReference?.value ?? null; sessions=savedSessions?.value ?? []; render();
+  videos = savedVideos.sort((a,b) => b.createdAt - a.createdAt); coachSessions=savedResults.filter(r=>r.kind==='live-coach').sort((a,b)=>b.createdAt-a.createdAt); results = savedResults.filter(r=>r.kind!=='live-coach').sort((a,b) => b.createdAt - a.createdAt); referenceId = savedReference?.value ?? null; sessions=savedSessions?.value ?? []; render();
 } catch (error) {
   screen.innerHTML = '<div class="panel empty"><h2>ブラウザの保存機能を利用できません</h2><p>別のタブを閉じ、通常のブラウザウィンドウで開き直してください。</p></div>';
   document.querySelectorAll('[data-page]').forEach(b => b.disabled = true); message(error.message, true);
