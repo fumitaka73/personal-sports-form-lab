@@ -1,9 +1,12 @@
 import './style.css';
+import { videoTransform, POSE_CONNECTIONS } from './pose-coordinates.js';
+import { mountLivePose } from './live-pose.js';
 import { listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis, commitSession, setSetting } from './storage.js';
 import { analyzeVideo, seekVideo } from './pose.js';
 import { validatePhases } from './metrics.js';
 import { reviewShot } from './shot-engine.js';
-import { detectSessionShots, summarizeSession } from './session.js';
+import { summarizeSession } from './session.js';
+import { detectSessionWithAdapter } from './shot-detector.js';
 import { drawFlightOverlay } from './flight-overlay.js';
 import { mountHoopSelector } from './hoop-selector.js';
 import { setupShotPlayback } from './shot-playback.js';
@@ -19,8 +22,8 @@ let videos = [], results = [], referenceId = null, activePage = 'good', activeRe
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
 app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.8 · SINGLE SHOT + SESSION</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
-<nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="results">03 比較結果</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
+<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.9 · LIVE POSE v0.25 BETA</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
+<nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="live">Live Pose (Beta)</button><button data-page="results">03 比較結果</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
 const screen = document.querySelector('#screen');
@@ -38,6 +41,7 @@ function render() {
   document.querySelectorAll('[data-page]').forEach(button => { button.classList.toggle('active', button.dataset.page === activePage); button.setAttribute('aria-current', button.dataset.page === activePage ? 'page' : 'false'); });
   if (activePage === 'good' || activePage === 'analyze') renderUpload(activePage === 'good');
   else if (activePage === 'session') renderSession();
+  else if (activePage === 'live') cleanup=mountLivePose(screen);
   else if (activePage === 'results') renderResult();
   else if (activePage === 'history') renderHistory();
   else renderLibrary();
@@ -205,15 +209,13 @@ function setupComparison(result) {
   const ends = analyses.map(a => a.phases.release + after);
   players.forEach(v => v.playbackRate = 0.5);
   function stop() { syncing = false; players.forEach(v => v.pause()); }
-  const pairs = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+  const pairs = POSE_CONNECTIONS;
   function overlay(player, canvas, analysis) {
     const width = player.clientWidth, height = player.clientHeight;
     if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
     const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, width, height);
     if (!player.videoWidth) return;
-    const scale = Math.min(width / player.videoWidth, height / player.videoHeight);
-    const vw = player.videoWidth * scale, vh = player.videoHeight * scale;
-    const x = p => (width - vw) / 2 + p.x * vw, y = p => (height - vh) / 2 + p.y * vh;
+    const {width:vw,height:vh,x,y}=videoTransform(player.videoWidth,player.videoHeight,width,height);
     if(analysis.hoop){const h=analysis.hoop;ctx.strokeStyle='#59e5f7';ctx.lineWidth=2;ctx.setLineDash([]);ctx.strokeRect(x({x:h.x-h.width/2}),y({y:h.y-h.height/2}),h.width*vw,h.height*vh);}
     if (document.querySelector('#show-ball').checked) {
       const points = (analysis.flightTracking?.points ?? analysis.ballTracking?.points ?? []).filter(p => p.time <= player.currentTime + 0.04 && p.time >= player.currentTime - 0.7);
@@ -281,7 +283,7 @@ function renderSession(){
     const progress=(text,value)=>{document.querySelector('#session-progress-text').textContent=text;document.querySelector('#session-progress').value=value;};
     try{
       const scan=await analyzeVideo(player,null,meta.hand,(text,value)=>progress(`全体の検出：${text}`,value*0.5),signal,true,{session:true});
-      const candidates=detectSessionShots(scan.frames,meta.hand,scan.aspect,scan.range),shots=[];
+      const candidates=detectSessionWithAdapter(scan.frames,meta.hand,scan.aspect,scan.range),shots=[];
       for(let i=0;i<candidates.length;i++){
         const detection=candidates[i];
         // Re-run the exact Single Shot analyzer on each window, with fresh model state.

@@ -2,18 +2,7 @@ import { calculateMetrics, validatePhases } from './metrics.js';
 import { BallTracker, detectBallCandidates } from './ball-tracking.js';
 import { classifyOutcome, validHoop } from './shot-outcome.js';
 import { detectShotPhases } from './auto-phases.js';
-const assetRoot = new URL(`${import.meta.env.BASE_URL}pose/`, document.baseURI).href;
-let scriptPromise;
-function loadPoseScript() {
-  if (window.Pose) return Promise.resolve();
-  if (!scriptPromise) scriptPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script'); script.src = `${assetRoot}pose.js`;
-    script.onload = resolve;
-    script.onerror = () => { scriptPromise = null; script.remove(); reject(new Error('姿勢推定モデルを読み込めませんでした。通信状態を確認して再試行してください。')); };
-    document.head.append(script);
-  });
-  return scriptPromise;
-}
+import { createPoseEngine } from './pose-engine.js';
 export function seekVideo(video, time) {
   if (Math.abs(video.currentTime - time) < 0.001 && video.readyState >= 2) return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -30,9 +19,9 @@ export async function analyzeVideo(video, phases, hand, onProgress, signal, phas
   else validatePhases(scanRange, video.duration);
   const checkCancel = () => { if (signal.aborted) throw new DOMException('分析をキャンセルしました。', 'AbortError'); };
   checkCancel(); onProgress('姿勢推定モデルを準備しています', 0);
-  await loadPoseScript(); checkCancel();
-  const pose = new window.Pose({ locateFile: file => `${assetRoot}${file}` });
-  pose.setOptions({ modelComplexity: 0, smoothLandmarks: false, enableSegmentation: false, selfieMode: false, minDetectionConfidence: 0.25, minTrackingConfidence: 0.25 });
+  let currentLandmarks=null;
+  const pose=await createPoseEngine(results=>{currentLandmarks=results.poseLandmarks?.map(p=>({x:p.x,y:p.y,z:p.z,visibility:p.visibility}))??null;});
+  if(signal.aborted){await pose.close().catch(()=>{});checkCancel();}
   const canvas = document.createElement('canvas');
   const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
   canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
@@ -42,8 +31,6 @@ export async function analyzeVideo(video, phases, hand, onProgress, signal, phas
   ballCanvas.width = Math.max(1, Math.round(video.videoWidth * ballScale)); ballCanvas.height = Math.max(1, Math.round(video.videoHeight * ballScale));
   const ballContext = ballCanvas.getContext('2d', { willReadFrequently: true });
   const tracker = new BallTracker(video.videoWidth / video.videoHeight);
-  let currentLandmarks = null;
-  pose.onResults(results => { currentLandmarks = results.poseLandmarks?.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility })) ?? null; });
   const originalTime = video.currentTime; video.pause();
   try {
     await pose.initialize(); checkCancel();

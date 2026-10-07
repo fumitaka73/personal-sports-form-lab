@@ -1,4 +1,5 @@
 import { shotCandidates, shotMotionRows } from './auto-phases.js';
+export const SESSION_POSE_THRESHOLDS=Object.freeze({prepHeight:.4,prepElbow:150,peakHeight:.2,minRise:.4,minExtendedElbow:115,minExtension:12,minStrength:.3});
 export function detectSessionShots(frames, hand, aspect, range) {
   const candidates = shotCandidates(frames, hand, aspect, range, true);
   const rows = shotMotionRows(frames, hand, aspect);
@@ -12,16 +13,16 @@ export function detectSessionShots(frames, hand, aspect, range) {
     let best=null;
     for(let i=0;i<motion.length;i++){
       const ready=motion[i];
-      if(ready.time>=release||ready.wristHeight>0.4)continue;
+      if(ready.time>=release||ready.wristHeight>SESSION_POSE_THRESHOLDS.prepHeight)continue;
       const rise=motion.slice(i).filter(r=>r.time<=release+0.8);
-      const high=rise.filter(r=>r.time>=ready.time+0.15&&r.wristHeight>=0.2&&r.wristHeight-ready.wristHeight>=0.4);
+      const high=rise.filter(r=>r.time>=ready.time+0.15&&r.wristHeight>=SESSION_POSE_THRESHOLDS.peakHeight&&r.wristHeight-ready.wristHeight>=SESSION_POSE_THRESHOLDS.minRise);
       // At least two successive high frames: a single tracking jump is insufficient.
       const peak=high.find((r,j)=>j&&r.time-high[j-1].time<=0.2);
       if(!peak)continue;
       const ascent=rise.filter(r=>r.time<=peak.time);
       if(ascent.some((r,j)=>j&&r.time-ascent[j-1].time>0.5))continue;
-      const bent=Number.isFinite(ready.elbow)&&ready.elbow<=150;
-      const extended=Number.isFinite(peak.elbow)&&peak.elbow>=115&&peak.elbow-ready.elbow>=12;
+      const bent=Number.isFinite(ready.elbow)&&ready.elbow<=SESSION_POSE_THRESHOLDS.prepElbow;
+      const extended=Number.isFinite(peak.elbow)&&peak.elbow>=SESSION_POSE_THRESHOLDS.minExtendedElbow&&peak.elbow-ready.elbow>=SESSION_POSE_THRESHOLDS.minExtension;
       if(candidate.source==='pose'&&!(bent&&extended))continue;
       best={readyTime:ready.time,peakTime:peak.time};break;
     }
@@ -29,7 +30,7 @@ export function detectSessionShots(frames, hand, aspect, range) {
   };
   candidates.sort((a,b) => (b.source==='ball')-(a.source==='ball') || b.strength-a.strength);
   for (const candidate of candidates) {
-    if(candidate.source==='pose' && candidate.strength<0.3)continue;
+    if(candidate.source==='pose' && candidate.strength<SESSION_POSE_THRESHOLDS.minStrength)continue;
     const cycle=evidence(candidate);if(!cycle)continue;
     if(selected.some(c=>Math.abs(c.phases.release-candidate.phases.release)<1.5||Math.abs(c.cycle.readyTime-cycle.readyTime)<0.5))continue;
     selected.push({...candidate,cycle});
