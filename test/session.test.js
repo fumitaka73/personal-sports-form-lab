@@ -43,3 +43,32 @@ test('session summary excludes unscored shots and shows chronological half trend
  assert.deepEqual(summarizeSession([{comparison:{overall:20}},{comparison:{overall:null}},{comparison:{overall:80}}]),{count:3,scoredCount:2,average:50,best:80,change:60});
  assert.deepEqual(summarizeSession([]),{count:0,scoredCount:0,average:null,best:null,change:null});
 });
+
+test('low arm swings and dribbling below the shoulder are not session shots',()=>{
+ const swings=Array.from({length:121},(_,i)=>{const time=i/12,p=structuredClone(frames()[0].landmarks);p[16].y=.48+.06*Math.sin(time*4);p[14].y=.42+.025*Math.sin(time*4);return {time,landmarks:p};});
+ assert.equal(detectSessionShots(swings,'right',1,{start:0,end:10}).length,0);
+});
+test('one-frame tracking spikes are not complete shooting cycles',()=>{
+ const jitter=Array.from({length:61},(_,i)=>{const p=structuredClone(frames()[0].landmarks);if(i===24){p[16].y=.05;p[14].y=.15;}return {time:i/12,landmarks:p};});
+ assert.equal(detectSessionShots(jitter,'right',1,{start:0,end:5}).length,0);
+});
+test('a long follow-through with repeated arm rises is counted once until a new preparation',()=>{
+ const follow=Array.from({length:97},(_,i)=>{const time=i/12,p=structuredClone(frames()[Math.min(i,24)].landmarks);if(time>2){p[16].y=.10+.035*Math.sin(time*4);p[14].y=.22+.025*Math.sin(time*4);}return {time,landmarks:p};});
+ assert.equal(detectSessionShots(follow,'right',1,{start:0,end:8}).length,1);
+});
+test('excluded false detections do not contribute to counts, scores or trends',()=>{
+ assert.deepEqual(summarizeSession([{comparison:{overall:20}},{excluded:true,comparison:{overall:100}},{comparison:{overall:80}}]),{count:2,scoredCount:2,average:50,best:80,change:60});
+});
+
+test('14 complete shots mixed with low nonshooting movements stay at 14 candidates',()=>{
+ const mixed=[];
+ for(let shot=0;shot<14;shot++){
+  for(const f of frames())mixed.push({...f,time:f.time+shot*5});
+  for(let i=1;i<36;i++){
+   const p=structuredClone(frames()[0].landmarks),time=shot*5+2+i/12;
+   p[16].y=.38+.035*Math.sin(i*.8);p[14].y=.38+.02*Math.sin(i*.8);
+   mixed.push({time,landmarks:p});
+  }
+ }
+ assert.equal(detectSessionShots(mixed,'right',1,{start:0,end:70}).length,14);
+});

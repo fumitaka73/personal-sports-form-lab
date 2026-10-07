@@ -20,6 +20,9 @@ function row(frame,hand,aspect){
   }
   return {time:frame.time,wrist,elbow:has(p,s,e,w)?angle({x:p[s].x*aspect,y:p[s].y},{x:p[e].x*aspect,y:p[e].y},wrist):null,wristHeight:(p[s].y-p[w].y)/torso,torso,ball,handDistance};
 }
+export function shotMotionRows(frames,hand,aspect){
+  return frames.map(f=>row(f,hand,aspect)).filter(Boolean);
+}
 function boundaries(rows,release,range){
   const pre=rows.filter(r=>r.time>=Math.max(range.start,release-2.2)&&r.time<release-0.12);
   const dip=pre.length?pre.reduce((best,r)=>r.wristHeight<best.wristHeight?r:best):null;
