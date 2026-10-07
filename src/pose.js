@@ -21,13 +21,13 @@ export function seekVideo(video, time) {
     video.currentTime = time;
   });
 }
-export async function analyzeVideo(video, phases, hand, onProgress, signal) {
+export async function analyzeVideo(video, phases, hand, onProgress, signal, phaseEstimated = false) {
   validatePhases(phases, video.duration);
   const checkCancel = () => { if (signal.aborted) throw new DOMException('分析をキャンセルしました。', 'AbortError'); };
   checkCancel(); onProgress('姿勢推定モデルを準備しています', 0);
   await loadPoseScript(); checkCancel();
   const pose = new window.Pose({ locateFile: file => `${assetRoot}${file}` });
-  pose.setOptions({ modelComplexity: 0, smoothLandmarks: false, enableSegmentation: false, selfieMode: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+  pose.setOptions({ modelComplexity: 0, smoothLandmarks: false, enableSegmentation: false, selfieMode: false, minDetectionConfidence: 0.25, minTrackingConfidence: 0.25 });
   const canvas = document.createElement('canvas');
   const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
   canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
@@ -44,13 +44,13 @@ export async function analyzeVideo(video, phases, hand, onProgress, signal) {
       await seekVideo(video, Math.min(time, video.duration - 0.001)); checkCancel();
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       currentLandmarks = null;
-      await pose.send({ image: canvas }, i * (1000 / 12));
+      await pose.send({ image: canvas }, (time - phases.start) * 1000);
       frames.push({ time, landmarks: currentLandmarks });
       onProgress(`フレーム抽出・姿勢検出 ${i + 1}/${count + 1}`, Math.round(85 * (i + 1) / (count + 1)));
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     checkCancel(); onProgress('指定したシュート区間の計測値を計算しています', 90);
-    return calculateMetrics(frames, phases, hand, video.videoWidth / video.videoHeight);
+    return calculateMetrics(frames, phases, hand, video.videoWidth / video.videoHeight, phaseEstimated);
   } catch (error) {
     if (error.name === 'AbortError' || error.message.includes('姿勢を十分') || error.message.includes('動きを十分') || error.message.includes('動画')) throw error;
     throw new Error('姿勢推定を実行できませんでした。WebGLが有効なChromeまたはEdgeで再試行してください。');

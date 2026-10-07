@@ -29,7 +29,7 @@ test('joint angles use correct geometry and reject zero length', () => {
 });
 test('invalid phase order, duration and non-finite inputs fail', () => {
   assert.doesNotThrow(() => validatePhases(phases,2));
-  for (const bad of [{start:0,release:NaN,end:2},{start:1,release:0,end:2},{start:0,release:1,end:11},{start:0,release:0.1,end:2}]) assert.throws(() => validatePhases(bad,2));
+  for (const bad of [{start:0,release:NaN,end:2},{start:1,release:0,end:2},{start:0,release:1,end:31},{start:0,release:2,end:2}]) assert.throws(() => validatePhases(bad,2));
 });
 test('deterministic metrics and self-comparison return 100', () => {
   const a = sample(), b = sample();
@@ -64,18 +64,58 @@ test('different shot types exclude lower body and jump-dependent metrics', () =>
   assert.ok(comparison.metrics.filter(m => m.group === 'lower' || m.shotDependent).every(m => m.score === null));
   assert.ok(comparison.metrics.find(m => m.key === 'elbowAngle').score !== null);
 });
-test('missing metrics do not become zero scores and insufficient comparison has no overall score', () => {
+test('one available metric yields a clearly low-confidence provisional score', () => {
   const a = sample(), b = sample(); b.metrics = Object.fromEntries(Object.keys(METRICS).map(k => [k,null]));
   b.metrics.elbowAngle = a.metrics.elbowAngle;
   const comparison = compareAnalyses(a,b,metadata,metadata);
-  assert.equal(comparison.overall,null);
+  assert.equal(comparison.overall,100);
   assert.equal(comparison.groups.find(g => g.key === 'balance').score,null);
-  assert.ok(generateFeedback(comparison).working.includes('不足'));
+  assert.equal(comparison.confidence,'Low');
+  assert.ok(comparison.warnings.some(w => w.includes('暫定')));
 });
-test('no person, occluded landmarks and large tracking gaps reject analysis', () => {
-  assert.throws(() => calculateMetrics(frames().map(f => ({...f,landmarks:null})),phases,'right'),/検出/);
-  assert.throws(() => calculateMetrics(frames().map(f => ({...f,landmarks:f.landmarks.map(p => ({...p,visibility:0.1}))})),phases,'right'),/検出/);
-  assert.throws(() => calculateMetrics(frames().map(f => f.time > 0.4 && f.time < 1 ? {...f,landmarks:null} : f),phases,'right'),/検出/);
+test('no detected person returns an accepted unscored analysis, never a fabricated number', () => {
+  const missing = calculateMetrics(frames().map(f => ({...f,landmarks:null})),phases,'right');
+  assert.equal(missing.coverage,0);
+  assert.ok(Object.values(missing.metrics).every(v => v === null));
+  const comparison = compareAnalyses(sample(),missing,metadata,metadata);
+  assert.equal(comparison.overall,null);
+  assert.equal(comparison.confidence,'Low');
+  assert.ok(comparison.warnings.some(w => w.includes('受付')));
+  assert.ok(generateFeedback(comparison).difference.includes('比較'));
+});
+test('cropped ankles do not discard the visible shooting arm', () => {
+  const cropped = calculateMetrics(frames().map(f => ({...f,landmarks:f.landmarks.map((p,i) => [27,28].includes(i) ? {...p,visibility:0} : p)})),phases,'right');
+  assert.ok(Number.isFinite(cropped.metrics.elbowAngle));
+  assert.equal(cropped.metrics.kneeAngle,null);
+  assert.equal(cropped.metrics.bodyOffset,null);
+  assert.equal(cropped.lowQuality,true);
+  assert.ok(compareAnalyses(sample(),cropped,metadata,metadata).overall !== null);
+});
+test('upper-body-only footage is accepted without invented torso or leg metrics', () => {
+  const cropped = calculateMetrics(frames().map(f => ({...f,landmarks:f.landmarks.map((p,i) => i >= 23 ? {...p,visibility:0} : p)})),phases,'right');
+  assert.ok(Number.isFinite(cropped.metrics.elbowAngle));
+  assert.equal(cropped.metrics.wristHeight,null);
+  assert.equal(cropped.metrics.verticalRise,null);
+  assert.equal(cropped.lowQuality,true);
+});
+test('low detection confidence and sparse tracking are warnings rather than rejection', () => {
+  const low = calculateMetrics(frames().map(f => ({...f,landmarks:f.landmarks.map(p => ({...p,visibility:0.3}))})),phases,'right');
+  assert.ok(Number.isFinite(low.metrics.elbowAngle));
+  assert.equal(compareAnalyses(sample(),low,metadata,metadata).confidence,'Low');
+  const sparse = calculateMetrics(frames().map((f,i) => [0,2,12,20,24].includes(i) ? f : {...f,landmarks:null}),phases,'right');
+  assert.ok(Number.isFinite(sparse.metrics.elbowAngle));
+  assert.equal(sparse.lowQuality,true);
+  assert.ok(sparse.warnings.some(w => w.includes('途切れ')));
+});
+test('release detection gaps use nearest measured values with a confidence warning', () => {
+  const gap = calculateMetrics(frames().map(f => Math.abs(f.time-1)<0.3 ? {...f,landmarks:null} : f),phases,'right');
+  assert.ok(Number.isFinite(gap.metrics.elbowAngle));
+  assert.equal(gap.lowQuality,true);
+  assert.ok(gap.warnings.some(w => w.includes('最も近い')));
+});
+test('automatic midpoint release and very short phase windows are accepted as approximate', () => {
+  assert.doesNotThrow(() => validatePhases({start:0,release:0.05,end:0.1},0.1));
+  assert.equal(calculateMetrics(frames(),phases,'right',1,true).lowQuality,true);
 });
 test('coaching prioritizes at most two improvements', () => {
   const a = sample(),b = sample();
@@ -84,7 +124,11 @@ test('coaching prioritizes at most two improvements', () => {
   assert.equal(feedback.focus.length,2);
 });
 
-test('stationary poses are not scored as shooting motion', () => {
+test('small or stationary movements still yield reference metrics with low confidence', () => {
   const still = frames().map(f => ({...f, landmarks: frames()[0].landmarks}));
-  assert.throws(() => calculateMetrics(still,phases,'right'), /動きを十分/);
+  const analysis = calculateMetrics(still,phases,'right');
+  assert.ok(Number.isFinite(analysis.metrics.elbowAngle));
+  assert.equal(analysis.metrics.armLead,null);
+  assert.equal(analysis.metrics.wristPeakTiming,null);
+  assert.equal(analysis.lowQuality,true);
 });

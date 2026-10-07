@@ -15,7 +15,7 @@ const focus = {
 };
 export function generateFeedback(comparison) {
   const used = comparison.metrics.filter(m => m.score !== null);
-  if (!used.length || comparison.overall === null) return { working: '比較に必要な計測値が不足しています。', difference: '姿勢がはっきり見える動画で再分析してください。', focus: ['全身とシュート側の腕が映る、同じ撮影角度の動画を使いましょう。'] };
+  if (!used.length || comparison.overall === null) return { working: '動画は受け付けました。姿勢情報が不足しているため、フォームの良い点を自動判定できませんでした。', difference: '数値で比較できる項目がありません。リリースを合わせた動画比較はそのまま利用できます。', focus: ['2本の動画をリリース位置で止め、肘の伸び具合と手の高さを見比べてメモを残しましょう。'] };
   const best = [...used].sort((a, b) => b.score - a.score)[0];
   const worst = [...used].sort((a, b) => a.score - b.score);
   return {

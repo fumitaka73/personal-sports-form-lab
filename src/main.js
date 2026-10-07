@@ -8,12 +8,12 @@ const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': 
 const date = value => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 const shotLabels = { jump: 'ジャンプシュート', set: 'セットシュート', free: 'フリースロー' };
 const cameraLabels = { front: '正面', side: '横', diagonal: '45度' };
-const confidenceLabels = { High: '高（High）', Medium: '中（Medium）', Low: '低（Low）' };
+const confidenceLabels = { High: '高（High）', Medium: '中（Medium）', Low: '低（精度低・Low）' };
 let videos = [], results = [], referenceId = null, activePage = 'good', activeResult = null;
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
 app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.2</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
+<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.3</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
 <nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">02 新しいシュート</button><button data-page="results">03 比較結果</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
@@ -36,6 +36,7 @@ function render() {
   else renderLibrary();
 }
 const reference = () => videos.find(v => v.id === referenceId);
+const videoAnalysisLabel = () => reference()?.analysis?.lowQuality ? '（精度低の参考分析）' : '';
 const options = (values, selected) => Object.entries(values).map(([value, label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
 function renderUpload(isReference) {
   const good = reference();
@@ -44,13 +45,13 @@ function renderUpload(isReference) {
     document.querySelector('#go-good').onclick = () => navigate('good'); return;
   }
   screen.innerHTML = `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">${isReference ? 'YOUR PERSONAL BASELINE' : 'COMPARE YOUR NEXT SHOT'}</p><h2>${isReference ? 'Good Formを登録' : '新しいシュートを分析'}</h2></div><span class="badge">ローカル分析</span></div>
-    ${good ? `<p class="reference-summary">現在のGood Form：<strong>${escape(good.title)}</strong> · ${shotLabels[good.shotType]} / ${cameraLabels[good.cameraAngle]}</p>` : ''}
-    <p class="instruction">全身とシュート側の腕が映る、1本のシュート動画を使ってください。Good Formと同じカメラ位置・撮影倍率が推奨です。手持ち撮影や複数人の映像には対応していません。</p>
-    <div class="upload-layout"><div><label class="upload" for="upload">＋ ${isReference ? 'Good Formの動画を選ぶ' : '新しい動画を選ぶ'}<input id="upload" type="file" accept="video/*"></label><p class="upload-hint">1本200MBまで · MP4（H.264）/ WebM推奨</p>
+    ${good ? `<p class="reference-summary">現在のGood Form：<strong>${escape(good.title)}</strong> · ${shotLabels[good.shotType]} / ${cameraLabels[good.cameraAngle]}${good.analysis?.lowQuality ? ' · 精度低（登録済み）' : ''}</p>${isReference ? (good.analysis?.warnings ?? []).map(w => `<p class="warning">${escape(w)}</p>`).join('') : ''}` : ''}
+    <p class="instruction">撮影角度が違う動画や、一部の関節が見えにくい動画も受け付けます。検出できた範囲で分析し、条件が悪い場合は「精度低」と表示します。同じカメラ位置で1人のシュートを撮ると比較しやすくなります。</p>
+    <div class="upload-layout"><div><label class="upload" for="upload">＋ ${isReference ? 'Good Formの動画を選ぶ' : '新しい動画を選ぶ'}<input id="upload" type="file" accept="video/*"></label><p class="upload-hint">MP4（H.264）/ WebM推奨 · 保存できる容量はブラウザによります</p>
     <label class="field">保存済みの動画から選ぶ<select id="existing"><option value="">動画を選択</option>${videos.map(v => `<option value="${escape(v.id)}">${escape(v.title)}</option>`).join('')}</select></label>
     <p id="file-name" class="filename"></p><video id="preview" controls playsinline preload="auto" hidden></video>
     <p id="video-error" class="error" role="alert" hidden>この形式を再生できません。MP4（H.264）またはWebMをお試しください。</p>
-    <div id="phase-controls" hidden><h3>シュート区間を指定</h3><p class="instruction">動画を一時停止して各ボタンを押します。リリースは「ボールが手を離れる瞬間」を目安にしてください。前後各0.3秒以上、合計10秒以内。</p>
+    <div id="phase-controls" hidden><h3>シュート区間を指定</h3><p class="instruction">そのまま分析することもできます。リリース時刻は区間の中央を仮に設定します。精度を上げるには、動画を一時停止して「ボールが手を離れる瞬間」を指定してください。合計30秒以内。</p>
       <div class="phase-grid">${[['start', '開始'], ['release', 'リリース'], ['end', '終了']].map(([id, label]) => `<label class="field">${label}（秒）<input id="${id}" type="number" min="0" step="0.01" required><button type="button" class="secondary mark" data-mark="${id}">現在の位置を指定</button></label>`).join('')}</div>
       <button class="secondary" id="slow" type="button">0.5倍速にする</button></div></div>
     <form id="analysis-form"><label class="field">シュート種別<select id="shot-type">${options(shotLabels, good?.shotType ?? 'jump')}</select></label>
@@ -66,7 +67,7 @@ function renderUpload(isReference) {
   const existingSelect = document.querySelector('#existing');
   const button = document.querySelector('#analyze-button');
   const form = document.querySelector('#analysis-form');
-  let draft = null;
+  let draft = null, phaseEstimated = true;
   function selectVideo(video) {
     draft = video; message(''); preview.hidden = false;
     document.querySelector('#file-name').textContent = video.title;
@@ -79,27 +80,29 @@ function renderUpload(isReference) {
     updateWarning();
   }
   preview.onloadeddata = () => {
-    if (!Number.isFinite(preview.duration) || preview.duration < 0.6) { message('0.6秒以上の動画を選んでください。', true); return; }
+    if (!Number.isFinite(preview.duration) || preview.duration <= 0) { message('再生可能な動画を選んでください。', true); return; }
     document.querySelector('#phase-controls').hidden = false;
     const phases = draft.analysis?.phases;
     document.querySelector('#start').value = phases?.start ?? 0;
-    document.querySelector('#release').value = phases?.release ?? '';
-    document.querySelector('#end').value = phases?.end ?? Math.min(preview.duration, 10).toFixed(2);
+    document.querySelector('#release').value = phases?.release ?? Math.min(preview.duration, 30) / 2;
+    phaseEstimated = draft.analysis ? Boolean(draft.analysis.phaseEstimated) : true;
+    document.querySelector('#end').value = phases?.end ?? Math.min(preview.duration, 30);
     button.disabled = false;
   };
   preview.onerror = () => { button.disabled = true; document.querySelector('#video-error').hidden = false; };
   fileInput.onchange = () => {
     const file = fileInput.files[0]; fileInput.value = '';
     if (!file) return;
-    if (!file.type.startsWith('video/') || !file.size || file.size > 200 * 1024 * 1024) { message('200MB以下の有効な動画を選んでください。', true); return; }
+    if (!file.size) { message('空のファイルです。動画ファイルを選んでください。', true); return; }
     existingSelect.value = ''; selectVideo({ id: crypto.randomUUID(), blob: file, title: file.name, notes: '', createdAt: Date.now() });
   };
   existingSelect.onchange = () => { const video = videos.find(v => v.id === existingSelect.value); if (video) selectVideo(video); };
-  document.querySelectorAll('[data-mark]').forEach(mark => mark.onclick = () => { preview.pause(); document.querySelector(`#${mark.dataset.mark}`).value = preview.currentTime.toFixed(2); });
+  document.querySelectorAll('[data-mark]').forEach(mark => mark.onclick = () => { preview.pause(); document.querySelector(`#${mark.dataset.mark}`).value = preview.currentTime.toFixed(2); if (mark.dataset.mark === 'release') phaseEstimated = false; });
+  document.querySelector('#release').oninput = () => { phaseEstimated = false; };
   document.querySelector('#slow').onclick = event => { preview.playbackRate = preview.playbackRate === 0.5 ? 1 : 0.5; event.target.textContent = preview.playbackRate === 0.5 ? '通常速度に戻す' : '0.5倍速にする'; };
   function updateWarning() {
     const warnings = [];
-    if (!isReference && document.querySelector('#camera-angle').value !== good.cameraAngle) warnings.push('撮影角度が異なります。比較項目を時間指標に絞り、信頼度を低く表示します。');
+    if (!isReference && document.querySelector('#camera-angle').value !== good.cameraAngle) warnings.push('撮影角度が異なっても分析できます。比較項目を時間指標に絞り、「精度低」と表示します。');
     if (!isReference && document.querySelector('#shot-type').value !== good.shotType) warnings.push('種別が異なります。下半身・跳躍に依存する項目は除外します。');
     const warning = document.querySelector('#condition-warning'); warning.textContent = warnings.join(' '); warning.hidden = !warnings.length;
   }
@@ -119,7 +122,7 @@ function renderUpload(isReference) {
     const onProgress = (text, progress) => { document.querySelector('#progress-text').textContent = text; document.querySelector('#progress').value = progress; };
     let completed = false;
     try {
-      const analysis = await analyzeVideo(preview, phases, metadata.hand, onProgress, signal);
+      const analysis = await analyzeVideo(preview, phases, metadata.hand, onProgress, signal, phaseEstimated);
       if (signal.aborted) throw new DOMException('キャンセル', 'AbortError');
       const video = { ...draft, ...metadata, notes, analysis, updatedAt: Date.now() };
       let result;
@@ -137,7 +140,7 @@ function renderUpload(isReference) {
       message(error.name === 'AbortError' ? '分析をキャンセルしました。結果は保存していません。' : error.name === 'QuotaExceededError' ? 'ブラウザの保存容量が不足しています。不要な記録を削除してください。' : error.message || '保存に失敗しました。もう一度お試しください。', error.name !== 'AbortError');
     } finally {
       busy = false; controller = null; document.querySelectorAll('[data-page]').forEach(c => c.disabled = false);
-      if (completed) { activePage = isReference ? 'good' : 'results'; render(); message(isReference ? 'Good Formを分析して登録しました。「新しいシュート」で比較できます。' : '分析結果を保存しました。'); }
+      if (completed) { activePage = isReference ? 'good' : 'results'; render(); message(isReference ? `Good Formを登録しました${videoAnalysisLabel()}。「新しいシュート」で比較できます。` : '分析結果を保存しました。'); }
       else { controls.forEach(c => c.disabled = false); preview.controls = true; document.querySelector('#progress-area').hidden = true; }
     }
   };
@@ -151,9 +154,9 @@ function renderResult() {
   const goodVideo = videos.find(v => v.id === result.referenceVideoId), newVideo = videos.find(v => v.id === result.newVideoId);
   screen.innerHTML = `<section class="panel"><div class="result-top"><div><p class="eyebrow">FORM MATCH</p><div class="score">${comparison.overall ?? '—'}<span>${comparison.overall === null ? '' : '%'}</span></div><p class="instruction">自分のGood Formとの一致度。<br>シュートの絶対的な品質や成功率の点数ではありません。</p></div><div class="result-meta"><span class="badge">分析信頼度：${confidenceLabels[comparison.confidence]}</span><p>${date(result.createdAt)}<br>${shotLabels[result.newMeta.shotType]} / ${cameraLabels[result.newMeta.cameraAngle]}</p><p class="fineprint">信頼度は姿勢の検出率・比較項目数・撮影条件による目安です。</p></div></div>
     ${comparison.warnings.map(w => `<p class="warning">${escape(w)}</p>`).join('')}
-    <div class="metric-grid">${comparison.groups.map(g => `<article class="metric-card"><h3>${g.label}</h3><strong>${g.score === null ? '対象外' : `${Math.round(g.score)}%`}</strong><p>${g.score === null ? '比較できる指標なし' : 'Good Formへの一致度'}</p></article>`).join('')}</div>
+    <p class="fineprint">計測できた比較項目：${comparison.usedMetricCount ?? comparison.metrics.filter(m => m.score !== null).length} / ${comparison.metrics.length}。不足する項目は採点しません。${comparison.overall === null ? ' 点数未算出でも、比較再生と履歴を利用できます。' : ''}</p><div class="metric-grid">${comparison.groups.map(g => `<article class="metric-card"><h3>${g.label}</h3><strong>${g.score === null ? '対象外' : `${Math.round(g.score)}%`}</strong><p>${g.score === null ? '比較できる指標なし' : 'Good Formへの一致度'}</p></article>`).join('')}</div>
     <div class="comparison-videos"><div><h3>GOOD FORM</h3><p class="filename">${escape(result.referenceTitle)}</p>${goodVideo ? `<div class="video-wrap"><video id="ref-player" controls playsinline src="${url(goodVideo.blob)}"></video><canvas id="ref-overlay" aria-hidden="true"></canvas></div>` : '<p>元の動画がありません。</p>'}<p class="fineprint">${shotLabels[result.referenceMeta.shotType]} / ${cameraLabels[result.referenceMeta.cameraAngle]}</p></div><div><h3>NEW SHOT</h3><p class="filename">${escape(result.newTitle)}</p>${newVideo ? `<div class="video-wrap"><video id="new-player" controls playsinline src="${url(newVideo.blob)}"></video><canvas id="new-overlay" aria-hidden="true"></canvas></div>` : '<p>元の動画がありません。</p>'}<p class="fineprint">${shotLabels[result.newMeta.shotType]} / ${cameraLabels[result.newMeta.cameraAngle]}</p></div></div>
-    <div class="sync-controls"><button class="primary" id="sync"${!goodVideo || !newVideo ? ' disabled' : ''}>リリースを合わせて同時再生</button><button class="secondary" id="pause">両方を停止</button><label>再生速度 <select id="speed"><option value="1">1倍</option><option value="0.5" selected>0.5倍</option><option value="0.25">0.25倍</option></select></label><label><input id="show-pose" type="checkbox" checked> 推定姿勢を表示</label></div><p class="fineprint">指定したリリース時刻をそろえ、両動画の区間が重なる範囲を同時再生します。骨格は近い分析フレームの推定結果です。</p>
+    <div class="sync-controls"><button class="primary" id="sync"${!goodVideo || !newVideo ? ' disabled' : ''}>リリースを合わせて同時再生</button><button class="secondary" id="pause">両方を停止</button><label>再生速度 <select id="speed"><option value="1">1倍</option><option value="0.5" selected>0.5倍</option><option value="0.25">0.25倍</option></select></label><label><input id="show-pose" type="checkbox" checked> 推定姿勢を表示</label></div><p class="fineprint">指定したリリース時刻をそろえ、両動画の区間が重なる範囲を同時再生します。骨格は近い分析フレームの推定結果です。点線は検出確度の低い関節を表します。</p>
     <div class="feedback-grid"><article><p class="eyebrow">WHAT’S WORKING</p><h3>近いところ</h3><p>${escape(feedback.working)}</p></article><article><p class="eyebrow">MAIN DIFFERENCE</p><h3>主な違い</h3><p>${escape(feedback.difference)}</p></article><article class="focus-card"><p class="eyebrow">NEXT SHOT FOCUS</p><h3>次の1本で意識すること</h3><ol>${feedback.focus.map(f => `<li>${escape(f)}</li>`).join('')}</ol></article></div>
     <details class="metric-details"><summary>計測値と採点の根拠</summary><p class="instruction">各指標の一致度 = max(0, 100 × (1 − |今回 − Good Form| ÷ 許容差))。各分類内で指標の重み付き平均を計算し、総合点は分類の重み付き平均です。対象外の項目は重みを除き再配分します。値が高いほど良いという意味ではありません。</p><p class="fineprint">分析版：${escape(comparison.version)} · Good Form検出率 ${Math.round(result.referenceAnalysis.coverage * 100)}% / 今回 ${Math.round(result.newAnalysis.coverage * 100)}% · 12フレーム/秒。基準の重み：下半身20%・バランス20%・肘20%・リリース25%・フォロースルー15%。</p>
     <div class="table-scroll"><table><thead><tr><th>指標</th><th>Good Form</th><th>今回</th><th>差</th><th>許容差 / 重み</th><th>一致度 / 除外理由</th></tr></thead><tbody>${comparison.metrics.map(m => `<tr><td>${m.label}<small>${m.unit}</small></td><td>${format(m.refValue)}</td><td>${format(m.value)}</td><td>${format(m.delta)}</td><td>${m.tolerance} / ${m.weight}</td><td>${m.excluded ? escape(m.excluded) : `${Math.round(m.score)}%`}</td></tr>`).join('')}</tbody></table></div></details>
@@ -183,8 +186,8 @@ function setupComparison(result) {
     const vw = player.videoWidth * scale, vh = player.videoHeight * scale;
     const x = p => (width - vw) / 2 + p.x * vw, y = p => (height - vh) / 2 + p.y * vh;
     ctx.strokeStyle = '#daf571'; ctx.fillStyle = '#daf571'; ctx.lineWidth = 2;
-    for (const [i,j] of pairs) { const a = frame.landmarks[i], b = frame.landmarks[j]; if ((a?.visibility ?? 0) < 0.55 || (b?.visibility ?? 0) < 0.55) continue; ctx.beginPath(); ctx.moveTo(x(a), y(a)); ctx.lineTo(x(b), y(b)); ctx.stroke(); }
-    for (const p of frame.landmarks.slice(11,29)) if (p.visibility >= 0.55) { ctx.beginPath(); ctx.arc(x(p),y(p),3,0,Math.PI*2); ctx.fill(); }
+    for (const [i,j] of pairs) { const a = frame.landmarks[i], b = frame.landmarks[j]; if ((a?.visibility ?? 0) < 0.2 || (b?.visibility ?? 0) < 0.2) continue; ctx.setLineDash(Math.min(a.visibility, b.visibility) < 0.55 ? [4,4] : []); ctx.beginPath(); ctx.moveTo(x(a), y(a)); ctx.lineTo(x(b), y(b)); ctx.stroke(); }
+    for (const p of frame.landmarks.slice(11,29)) if (p.visibility >= 0.2) { ctx.beginPath(); ctx.arc(x(p),y(p),3,0,Math.PI*2); ctx.fill(); }
   }
   function tick() {
     if (syncing && !correcting) {

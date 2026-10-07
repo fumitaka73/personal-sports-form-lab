@@ -1,4 +1,4 @@
-export const ANALYSIS_VERSION = 'basketball-0.2.0';
+export const ANALYSIS_VERSION = 'basketball-0.3.0';
 export const METRICS = {
   kneeArmTiming: { group: 'lower', label: '脚と腕の伸展タイミング差', unit: '動作比', tolerance: 0.4, weight: 1, temporal: true },
   torsoLean: { group: 'balance', label: 'リリース付近の体幹の傾き', unit: '°', tolerance: 25, weight: 1 },
