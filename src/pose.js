@@ -1,4 +1,6 @@
 import { calculateMetrics, validatePhases } from './metrics.js';
+import { BallTracker, detectBallCandidates } from './ball-tracking.js';
+import { detectShotPhases } from './auto-phases.js';
 const assetRoot = new URL(`${import.meta.env.BASE_URL}pose/`, document.baseURI).href;
 let scriptPromise;
 function loadPoseScript() {
@@ -21,8 +23,9 @@ export function seekVideo(video, time) {
     video.currentTime = time;
   });
 }
-export async function analyzeVideo(video, phases, hand, onProgress, signal, phaseEstimated = false) {
-  validatePhases(phases, video.duration);
+export async function analyzeVideo(video, phases, hand, onProgress, signal, phaseEstimated = false, options = {}) {
+  const scanRange = options.autoPhases ? { start: 0, release: Math.min(video.duration, 30) / 2, end: Math.min(video.duration, 30) } : phases;
+  validatePhases(scanRange, video.duration);
   const checkCancel = () => { if (signal.aborted) throw new DOMException('分析をキャンセルしました。', 'AbortError'); };
   checkCancel(); onProgress('姿勢推定モデルを準備しています', 0);
   await loadPoseScript(); checkCancel();
@@ -32,25 +35,47 @@ export async function analyzeVideo(video, phases, hand, onProgress, signal, phas
   const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
   canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
   const context = canvas.getContext('2d'); const frames = [];
+  const ballCanvas = document.createElement('canvas');
+  const ballScale = Math.min(1, 320 / Math.max(video.videoWidth, video.videoHeight));
+  ballCanvas.width = Math.max(1, Math.round(video.videoWidth * ballScale)); ballCanvas.height = Math.max(1, Math.round(video.videoHeight * ballScale));
+  const ballContext = ballCanvas.getContext('2d', { willReadFrequently: true });
+  const tracker = new BallTracker(video.videoWidth / video.videoHeight);
   let currentLandmarks = null;
   pose.onResults(results => { currentLandmarks = results.poseLandmarks?.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility })) ?? null; });
   const originalTime = video.currentTime; video.pause();
   try {
     await pose.initialize(); checkCancel();
-    const count = Math.ceil((phases.end - phases.start) * 12);
+    const count = Math.ceil((scanRange.end - scanRange.start) * 12);
     for (let i = 0; i <= count; i++) {
       checkCancel();
-      const time = phases.start + (phases.end - phases.start) * i / count;
+      const time = scanRange.start + (scanRange.end - scanRange.start) * i / count;
       await seekVideo(video, Math.min(time, video.duration - 0.001)); checkCancel();
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       currentLandmarks = null;
-      await pose.send({ image: canvas }, (time - phases.start) * 1000);
-      frames.push({ time, landmarks: currentLandmarks });
-      onProgress(`フレーム抽出・姿勢検出 ${i + 1}/${count + 1}`, Math.round(85 * (i + 1) / (count + 1)));
+      await pose.send({ image: canvas }, (time - scanRange.start) * 1000);
+      ballContext.drawImage(video, 0, 0, ballCanvas.width, ballCanvas.height);
+      const candidates = detectBallCandidates(ballContext.getImageData(0, 0, ballCanvas.width, ballCanvas.height));
+      const ball = tracker.update(candidates, currentLandmarks, time, hand);
+      frames.push({ time, landmarks: currentLandmarks, ball });
+      onProgress(`姿勢検出・ボール追跡 ${i + 1}/${count + 1}`, Math.round(85 * (i + 1) / (count + 1)));
       await new Promise(resolve => setTimeout(resolve, 0));
     }
-    checkCancel(); onProgress('指定したシュート区間の計測値を計算しています', 90);
-    return calculateMetrics(frames, phases, hand, video.videoWidth / video.videoHeight, phaseEstimated);
+    checkCancel(); onProgress('シュート区間とリリース候補を計算しています', 90);
+    const automatic = options.autoPhases ? detectShotPhases(frames, hand, video.videoWidth / video.videoHeight, scanRange) : null;
+    const selected = automatic?.phases ?? phases;
+    const analyzedFrames = frames.filter(f => f.time >= selected.start - 0.001 && f.time <= selected.end + 0.001);
+    const analysis = calculateMetrics(analyzedFrames, selected, hand, video.videoWidth / video.videoHeight, automatic ? automatic.source !== 'ball' : phaseEstimated);
+    analysis.autoDetection = automatic;
+    analysis.phaseSource = automatic?.source ?? 'manual';
+    analysis.ballTracking = { method: 'local-orange-color-shape', points: tracker.history, detectedFrames: tracker.history.length, scannedFrames: frames.length, coverage: tracker.history.length / frames.length };
+    if (automatic) {
+      analysis.warnings = analysis.warnings.filter(w => !w.startsWith('リリース時刻は'));
+      analysis.warnings.unshift(automatic.reason);
+      // Automatic release inference is approximate even when a colored ball is tracked.
+      if (automatic.confidence !== 'High') analysis.lowQuality = true;
+    }
+    if (!tracker.history.length) analysis.warnings.push('ボールを追跡できませんでした。色・輪郭による検出は主にオレンジ・茶色のボール向けです。');
+    return analysis;
   } catch (error) {
     if (error.name === 'AbortError' || error.message.includes('姿勢を十分') || error.message.includes('動きを十分') || error.message.includes('動画')) throw error;
     throw new Error('姿勢推定を実行できませんでした。WebGLが有効なChromeまたはEdgeで再試行してください。');

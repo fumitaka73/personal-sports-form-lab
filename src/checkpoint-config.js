@@ -1,5 +1,5 @@
 // Personal coaching targets requested by the user; not universal biomechanical norms.
-export const CHECKPOINT_VERSION = 'personal-checks-0.4.0';
+export const CHECKPOINT_VERSION = 'personal-checks-0.5.0';
 export const UNRATED_SCORE = 50;
 export const CHECK_TARGETS = {
   releaseHeight: { min: -0.25, max: 0.15, tolerance: 0.55, unit: '胴長比' },

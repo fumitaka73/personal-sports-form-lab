@@ -38,19 +38,23 @@ export function evaluateCheckpoints(analysis, metadata={}, referenceAnalysis=nul
       scale=shoulderWidth>0.04?shoulderWidth*1.4:headWidth>0.02?headWidth*4:null;
       scaleEstimated=Boolean(scale);
     }
-    return {time:f.time,p,scale,scaleEstimated};
+    return {time:f.time,p,scale,scaleEstimated,ball:f.ball};
   }).filter(Boolean);
   const pre=rows.filter(r=>r.time<=analysis.phases.release), post=rows.filter(r=>r.time>=analysis.phases.release);
   function nearRelease(ids,needsScale=true) {
     const usable=rows.filter(r=>has(r.p,...ids)&&(!needsScale||r.scale));
     return usable.length?usable.reduce((best,r)=>Math.abs(r.time-analysis.phases.release)<Math.abs(best.time-analysis.phases.release)?r:best):null;
   }
-  const r=nearRelease([0,s,w]);
-  const releaseHeight=r?(r.p[0].y-r.p[w].y)/r.scale:null;
-  const noseDistance=r?length(r.p[0],r.p[w])/r.scale:null;
-  const releaseNote='ボールではなく手首を代用します。鼻付近は利用者が指定した目標です。';
+  const r=nearRelease([0,s]);
+  const useBall = r?.ball && r.ball.confidence >= 0.45;
+  const releasePosition = useBall ? {x:r.ball.x*(analysis.aspect??1),y:r.ball.y} : r && has(r.p,w) ? r.p[w] : null;
+  const sourceLabel = useBall ? 'ボール候補（色・輪郭推定）' : '手首';
+  const releaseHeight=r&&releasePosition?(r.p[0].y-releasePosition.y)/r.scale:null;
+  const noseDistance=r&&releasePosition?length(r.p[0],releasePosition)/r.scale:null;
+  const releaseNote=useBall ? '色・輪郭で検出したボール候補の中心位置を使います。誤検出や手離れ時刻の誤差があります。鼻付近は利用者が指定した目標です。' : 'ボールが未追跡のため手首を代用します。鼻付近は利用者が指定した目標です。';
   const height=measured('releaseHeight','リリース位置が高すぎないか',releaseHeight, releaseHeight>0.15?'推定リリース位置（手首）が鼻より高すぎる傾向です。鼻付近という指定目標より上にあります。':releaseHeight< -0.25?'推定リリース位置（手首）が鼻より低い傾向です。':'推定リリース位置（手首）は鼻付近の高さです。', '鼻・手首・胴体が検出できず、リリースの高さは未評価です。',true);
   const nose=measured('noseDistance','鼻のあたりでリリースできているか',noseDistance,noseDistance>0.25?'リリース付近の手首が鼻から離れています。高さに加えて、顔との距離も確認してください。':'リリース付近の手首は鼻の近くにあります。','鼻との距離を計測できません。ボールの実際の離れ位置は追跡していません。',true);
+  if (useBall) { height.comment=height.comment.replaceAll('手首',sourceLabel); nose.comment=nose.comment.replaceAll('手首',sourceLabel); }
   height.note=nose.note=releaseNote+(r?.scaleEstimated?' 胴体が見えないため、肩幅または顔の大きさから換算した近似です。':'');
   const releaseApprox=Boolean(analysis.phaseEstimated)||(r&&Math.abs(r.time-analysis.phases.release)>0.15);
   if(releaseApprox) [height,nose].forEach(part=>part.note+=' リリース時刻または使用フレームも近似です。');

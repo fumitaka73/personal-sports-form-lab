@@ -68,7 +68,7 @@ export function calculateMetrics(frames, phases, hand, aspect = 1, phaseEstimate
   const completeCoverage = frames.length ? rows.filter(r => r.complete).length / frames.length : 0;
   const pre = rows.filter(r => r.time <= phases.release), post = rows.filter(r => r.time >= phases.release);
   const warnings = [];
-  if (phaseEstimated) warnings.push('リリース時刻は区間の中央を仮に使用しています。実際のリリース位置に合わせると比較精度が上がります。');
+  if (phaseEstimated) warnings.push('リリース時刻は近似・仮設定を使用しています。実際のリリース位置に合わせると比較精度が上がります。');
   if (!rows.length) warnings.push('姿勢を検出できませんでした。動画は受け付けましたが、自動計測値と点数は表示できません。動画の比較再生とメモは利用できます。');
   else if (coverage < 0.65 || rows.length < 10) warnings.push('姿勢を検出できた場面が少ないため、精度低の参考分析です。見えている関節だけを計測しています。');
   if (rows.length && completeCoverage < 0.8) warnings.push('全身の関節がそろわない場面があるため、見える部分だけを使った精度低の分析です。');
