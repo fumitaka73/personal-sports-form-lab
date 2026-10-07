@@ -72,3 +72,13 @@ test('14 complete shots mixed with low nonshooting movements stay at 14 candidat
  }
  assert.equal(detectSessionShots(mixed,'right',1,{start:0,end:70}).length,14);
 });
+
+test('tracked ball departure is retained even with low/cropped shooting posture',()=>{
+ const lowered=sessionFrames().map(f=>({...f,landmarks:f.landmarks.map((p,i)=>i===16?{...p,y:p.y+.3}:p),ball:{...f.ball,y:f.ball.y+.3}}));
+ const shots=detectSessionShots(lowered,'right',1,{start:0,end:10});assert.equal(shots.length,3);assert.ok(shots.every(s=>s.source==='ball'));
+});
+
+test('a compact pose-only shooting arc is retained without demanding a very high wrist',()=>{
+ const compact=frames().map(f=>{const p=structuredClone(f.landmarks),v=Math.min(1,f.time);p[12]={x:.5,y:.35,visibility:.99};p[24]={x:.5,y:.6,visibility:.99};p[14]={x:.55,y:.39-.08*v,visibility:.99};p[16]={x:.55+.03*v,y:.4-.12*v,visibility:.99};return {...f,landmarks:p};});
+ assert.equal(detectSessionShots(compact,'right',1,{start:0,end:2}).length,1);
+});

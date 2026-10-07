@@ -1,5 +1,6 @@
 import { calculateMetrics, validatePhases } from './metrics.js';
 import { BallTracker, detectBallCandidates } from './ball-tracking.js';
+import { classifyOutcome, validHoop } from './shot-outcome.js';
 import { detectShotPhases } from './auto-phases.js';
 const assetRoot = new URL(`${import.meta.env.BASE_URL}pose/`, document.baseURI).href;
 let scriptPromise;
@@ -77,6 +78,30 @@ export async function analyzeVideo(video, phases, hand, onProgress, signal, phas
       if (automatic.confidence !== 'High') analysis.lowQuality = true;
     }
     if (!tracker.history.length) analysis.warnings.push('ボールを追跡できませんでした。色・輪郭による検出は主にオレンジ・茶色のボール向けです。');
+    analysis.hoop=validHoop(options.hoop)?options.hoop:null;
+    if(analysis.hoop){
+      try{
+      onProgress('ゴール付近までボールの軌道を追跡しています',95);
+      const flightStart=Math.max(selected.start,selected.release-0.4);
+      const flightEnd=Math.min(video.duration-0.001,selected.release+4,options.outcomeEnd??Infinity);
+      const flightCanvas=document.createElement('canvas'),flightScale=Math.min(1,960/Math.max(video.videoWidth,video.videoHeight));
+      flightCanvas.width=Math.round(video.videoWidth*flightScale);flightCanvas.height=Math.round(video.videoHeight*flightScale);
+      const flightContext=flightCanvas.getContext('2d',{willReadFrequently:true});
+      const flightTracker=new BallTracker(video.videoWidth/video.videoHeight);
+      const seed=tracker.history.filter(p=>p.time<=flightStart).at(-1);
+      if(seed&&flightStart-seed.time<.3){flightTracker.last=seed;flightTracker.trackId=seed.trackId;}
+      const steps=Math.ceil((flightEnd-flightStart)*24);
+      for(let i=0;i<=steps;i++){
+        checkCancel();const time=flightStart+(flightEnd-flightStart)*i/Math.max(1,steps);
+        await seekVideo(video,time);flightContext.drawImage(video,0,0,flightCanvas.width,flightCanvas.height);
+        const nearest=frames.reduce((best,f)=>!best||Math.abs(f.time-time)<Math.abs(best.time-time)?f:best,null);
+        flightTracker.update(detectBallCandidates(flightContext.getImageData(0,0,flightCanvas.width,flightCanvas.height)),nearest&&Math.abs(nearest.time-time)<.15?nearest.landmarks:null,time,hand);
+        await new Promise(resolve=>setTimeout(resolve,0));
+      }
+      analysis.flightTracking={points:flightTracker.history,method:'orange-color-24fps',range:{start:flightStart,end:flightEnd}};
+      analysis.outcome=classifyOutcome(flightTracker.history,analysis.hoop,selected.release);
+      }catch(error){if(error.name==='AbortError')throw error;analysis.outcome={status:'unknown',label:'判定不能',reason:'ゴール付近の追跡を完了できませんでした。フォームの分析結果は保持しています。'};}
+    }else analysis.outcome=classifyOutcome([],null,selected.release);
     return analysis;
   } catch (error) {
     if (error.name === 'AbortError' || error.message.includes('姿勢を十分') || error.message.includes('動きを十分') || error.message.includes('動画')) throw error;

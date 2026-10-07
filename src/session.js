@@ -7,19 +7,21 @@ export function detectSessionShots(frames, hand, aspect, range) {
   const evidence = candidate => {
     const release=candidate.phases.release;
     const motion=rows.filter(r=>r.time>=release-1.5&&r.time<=release+0.8);
+    if(candidate.source==='ball')return {readyTime:release-.3,peakTime:release};
     if(motion.length<5)return null;
     let best=null;
     for(let i=0;i<motion.length;i++){
       const ready=motion[i];
-      if(ready.time>=release||ready.wristHeight>0.15)continue;
+      if(ready.time>=release||ready.wristHeight>0.4)continue;
       const rise=motion.slice(i).filter(r=>r.time<=release+0.8);
-      if(rise.some((r,j)=>j&&r.time-rise[j-1].time>0.25))continue;
-      const high=rise.filter(r=>r.time>=ready.time+0.15&&r.wristHeight>=0.45&&r.wristHeight-ready.wristHeight>=0.65);
+      const high=rise.filter(r=>r.time>=ready.time+0.15&&r.wristHeight>=0.2&&r.wristHeight-ready.wristHeight>=0.4);
       // At least two successive high frames: a single tracking jump is insufficient.
       const peak=high.find((r,j)=>j&&r.time-high[j-1].time<=0.2);
       if(!peak)continue;
-      const bent=Number.isFinite(ready.elbow)&&ready.elbow<=140;
-      const extended=Number.isFinite(peak.elbow)&&peak.elbow>=125&&peak.elbow-ready.elbow>=20;
+      const ascent=rise.filter(r=>r.time<=peak.time);
+      if(ascent.some((r,j)=>j&&r.time-ascent[j-1].time>0.5))continue;
+      const bent=Number.isFinite(ready.elbow)&&ready.elbow<=150;
+      const extended=Number.isFinite(peak.elbow)&&peak.elbow>=115&&peak.elbow-ready.elbow>=12;
       if(candidate.source==='pose'&&!(bent&&extended))continue;
       best={readyTime:ready.time,peakTime:peak.time};break;
     }
@@ -38,7 +40,7 @@ export function detectSessionShots(frames, hand, aspect, range) {
   const cycles=[];
   for(const candidate of selected){
     const previous=cycles.at(-1);
-    const reset=!previous||rows.some((r,j)=>r.time>previous.cycle.peakTime&&r.time<candidate.phases.release&&r.wristHeight<=0.15&&j+1<rows.length&&rows[j+1].time<candidate.phases.release&&rows[j+1].time-r.time<=0.2&&rows[j+1].wristHeight<=0.15);
+    const reset=!previous||candidate.source==='ball'||rows.some((r,j)=>r.time>previous.cycle.peakTime&&r.time<candidate.phases.release&&j+1<rows.length&&rows[j+1].time<candidate.phases.release&&rows[j+1].time-r.time<=0.2&&((r.wristHeight<=0.4&&rows[j+1].wristHeight<=0.4)||(r.elbow<140&&rows[j+1].elbow<140)));
     if(reset)cycles.push(candidate);
   }
   return cycles.map((c,i)=> {

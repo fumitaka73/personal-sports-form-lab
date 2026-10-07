@@ -1,12 +1,12 @@
 // Bound playback to one detected window. The original session Blob is reused.
-export function setupShotPlayback(player, seek, onLabel, onError) {
+export function setupShotPlayback(player, seek, onLabel, onError, onFrame=()=>{}) {
   let selected=null, disposed=false, sequence=0, selecting=false, raf;
   const bound=()=>{
     if(!selected||selecting||disposed)return;
     if(player.currentTime>=selected.end){player.pause();if(player.currentTime>selected.end+0.01)player.currentTime=selected.end;}
     else if(player.currentTime<selected.start-0.01)player.currentTime=selected.start;
   };
-  const tick=()=>{bound();if(!disposed)raf=requestAnimationFrame(tick);};
+  const tick=()=>{bound();onFrame(player,selected);if(!disposed)raf=requestAnimationFrame(tick);};
   const play=()=>{
     if(selected&&!selecting&&(player.currentTime>=selected.end-0.02||player.currentTime<selected.start)){
       player.pause();void select(selected,true);
