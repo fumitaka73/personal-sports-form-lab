@@ -4,7 +4,6 @@ import {emptyReviewData,collectCases,referenceCatalog} from './review-data.js';
 import './style.css';
 import { videoTransform, POSE_CONNECTIONS } from './pose-coordinates.js';
 import {mountLiveCoach,coachSummaryHTML} from './live-coach.js';
-import { mountLivePose } from './live-pose.js';
 import { saveCoachSession, listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis, commitSession, setSetting } from './storage.js';
 import { analyzeVideo, seekVideo } from './pose.js';
 import { validatePhases } from './metrics.js';
@@ -29,7 +28,7 @@ let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = 
 const app = document.querySelector('#app');
 app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
 <main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.12 · SHOT REVIEW v0.4</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
-<nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="coach">Live Coach</button><button data-page="live">Live Pose (Beta)</button><button data-page="results">03 比較結果</button><button data-page="review">Shot Review / Calibration</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
+<nav class="tabs" aria-label="画面選択"><button data-page="good">Good Form登録</button><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="coach">Live Coach</button><button data-page="review">Shot Review / Calibration</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
 const screen = document.querySelector('#screen');
@@ -49,7 +48,6 @@ function render() {
   else if (activePage === 'session') renderSession();
   else if (activePage === 'review') renderReview();
   else if (activePage === 'coach') cleanup=mountLiveCoach(screen,{videos:Object.values(catalog()),referenceId,onSave:async session=>{await saveCoachSession(session);coachSessions=[session,...coachSessions.filter(s=>s.id!==session.id)];}});
-  else if (activePage === 'live') cleanup=mountLivePose(screen);
   else if (activePage === 'results') renderResult();
   else if (activePage === 'history') renderHistory();
   else renderLibrary();
@@ -72,7 +70,7 @@ function renderUpload(isReference) {
     screen.innerHTML = `<div class="panel empty"><span class="empty-icon">01</span><h2>まずGood Formを登録しましょう。</h2><p>コーチが評価した自分のシュート動画を、比較の基準にします。</p><button class="primary" id="go-good">Good Formを登録</button></div>`;
     document.querySelector('#go-good').onclick = () => navigate('good'); return;
   }
-  screen.innerHTML = `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">${isReference ? 'YOUR PERSONAL BASELINE' : 'COMPARE YOUR NEXT SHOT'}</p><h2>${isReference ? 'Good Formを登録' : '新しいシュートを分析'}</h2></div><span class="badge">ローカル分析</span></div>
+  screen.innerHTML = `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">${isReference ? 'YOUR PERSONAL BASELINE' : 'COMPARE YOUR NEXT SHOT'}</p><h2>${isReference ? 'Good Form登録' : '新しいシュートを分析'}</h2></div><span class="badge">ローカル分析</span></div>
     ${good ? `<p class="reference-summary">現在のGood Form：<strong>${escape(good.title)}</strong> · ${shotLabels[good.shotType]} / ${cameraLabels[good.cameraAngle]}${good.analysis?.lowQuality ? ' · 精度低（登録済み）' : ''}</p>${isReference ? (good.analysis?.warnings ?? []).map(w => `<p class="warning">${escape(w)}</p>`).join('') : ''}` : ''}
     <p class="instruction">撮影角度が違う動画や、一部の関節が見えにくい動画も受け付けます。検出できた範囲で分析し、条件が悪い場合は「精度低」と表示します。同じカメラ位置で1人のシュートを撮ると比較しやすくなります。</p>
     <div class="upload-layout"><div><label class="upload" for="upload">＋ ${isReference ? 'Good Formの動画を選ぶ' : '新しい動画を選ぶ'}<input id="upload" type="file" accept="video/*"></label><p class="upload-hint">MP4（H.264）/ WebM推奨 · 保存できる容量はブラウザによります</p>

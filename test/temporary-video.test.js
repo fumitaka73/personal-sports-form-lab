@@ -13,7 +13,7 @@ class FakeRecorder extends EventTarget{
 }
 test('Safari codec detection, unsupported fallback and complete action margins',()=>{
  assert.equal(supportedMime(FakeRecorder),'video/mp4');assert.equal(supportedMime(null),null);
- assert.deepEqual(clipRange({start:11,end:14},10),{start:10,end:16});assert.equal(intersects({start:9,end:12},{start:10,end:16}),true);assert.equal(intersects({start:16,end:20},{start:10,end:16}),false);
+ assert.deepEqual(clipRange({start:11,end:14},10),{start:10.25,end:14.75});assert.equal(intersects({start:9,end:12},{start:10,end:16}),true);assert.equal(intersects({start:16,end:20},{start:10,end:16}),false);
  assert.equal(mayExpire({keep:true,expiresAt:0}),false);assert.equal(mayExpire({keep:false,expiresAt:0}),true);
 });
 test('recording stop flushes independent segment before resolving; quota stops future segments',async()=>{

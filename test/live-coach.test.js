@@ -52,3 +52,18 @@ test('voice threshold overrides preserve scores and dip focus can outrank releas
  const c=comparison(92);const before=structuredClone(c);assert.equal(selectCoachFeedback(c,{thresholds:{good:80,perfect:90}}).code,'perfect');assert.deepEqual(c,before);
  c.metrics.push({key:'kneeAngle',label:'Dip',group:'lower',unit:'deg',delta:20,tolerance:25});const f=selectCoachFeedback(c,{focus:'dip'});assert.equal(f.code,'legs');assert.equal(f.text.ja,'ディップ浅い');c.metrics.at(-1).delta=-20;assert.equal(selectCoachFeedback(c,{focus:'dip'}).text.ja,'ディップ深い');
 });
+
+test('coach phrases identify specific timing and focus without vague rhythm or reference wording',()=>{
+ const metric=(key,group,delta,temporal=false)=>({key,group,delta,tolerance:.4,temporal,weight:1});
+ const c=metrics=>({overall:60,confidence:'Medium',metrics});
+ assert.equal(selectCoachFeedback(c([metric('kneeArmTiming','lower',.2,true)]),{focus:'lower'}).text.ja,'脚の伸ばし始めが遅い');
+ assert.equal(selectCoachFeedback(c([metric('kneeArmTiming','lower',-.2,true)]),{focus:'lower'}).text.ja,'脚の伸ばし始めが早い');
+ assert.equal(selectCoachFeedback(c([metric('armLead','release',.2,true)]),{focus:'rhythm'}).text.ja,'腕の伸ばし始めが早い');
+ assert.equal(selectCoachFeedback(c([metric('wristPeakTiming','release',.2,true)]),{focus:'rhythm'}).text.ja,'腕の上げ終わりが遅い');
+ const dip=c([metric('kneeAngle','lower',.6),metric('kneeArmTiming','lower',-.8,true)]);
+ assert.equal(selectCoachFeedback(dip,{focus:'dip'}).text.ja,'ディップ浅すぎ');
+ assert.equal(selectCoachFeedback(dip,{focus:'lower'}).text.ja,'脚の伸ばし始めが早い');
+ assert.equal(selectCoachFeedback({...dip,metrics:[metric('kneeAngle','lower',-.6)]},{focus:'dip'}).text.ja,'ディップ深すぎ');
+ assert.equal(selectCoachFeedback({...dip,overall:90,metrics:[metric('kneeAngle','lower',0)]},{focus:'dip'}).text.ja,'ディップちょうどいい');
+ assert.equal(selectCoachFeedback({...dip,overall:90,metrics:[metric('wristHeight','release',0)]},{focus:'release'}).text.ja,'リリースいいです');
+});

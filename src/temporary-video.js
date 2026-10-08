@@ -5,7 +5,7 @@ export function supportedMime(Recorder=globalThis.MediaRecorder){
  if(!Recorder)return null;
  return ['video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp8','video/webm'].find(t=>Recorder.isTypeSupported(t))??'';
 }
-export function clipRange(phases,origin=0,before=2,after=2){return {start:Math.max(origin,phases.start-before),end:phases.end+after};}
+export function clipRange(phases,origin=0,before=.75,after=.75){return {start:Math.max(origin,phases.start-before),end:phases.end+after};}
 export function intersects(segment,range){return segment.start<range.end&&segment.end>range.start;}
 export function mayExpire(segment,now=Date.now()){return !segment.keep&&segment.expiresAt<=now;}
 export class TemporaryRecorder{

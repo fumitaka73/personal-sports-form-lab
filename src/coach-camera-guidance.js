@@ -16,6 +16,6 @@ export function cameraGuidance(frames,hand='right'){
   if(required.some(i=>!visible.includes(i)))counts.partial++;
  }
  const code=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];if(counts[code]/rows.length<.6)return null;
- const phrases={missing:['体を検出できません。カメラを固定し、全身が映る位置と遮蔽物を確認してください','Body not detected. Secure the camera and check full-body framing and obstructions'],far:['体が小さく映っています。少しカメラに近づいてください','You look small in the frame. Move a little closer'],clipped:['体が画面から切れています。全身が映るよう調整してください','Your body is cut off. Adjust the camera to show your whole body'],partial:['全身やシュートする腕が見えにくいです。カメラの位置と遮蔽物を確認してください','Your body or shooting arm is hard to see. Check camera position and obstructions']};
+ const phrases={missing:['全身を映して','Body not detected. Secure the camera and check full-body framing and obstructions'],far:['少しカメラに近づいて','You look small in the frame. Move a little closer'],clipped:['全身が入る位置へ','Your body is cut off. Adjust the camera to show your whole body'],partial:['シュートする腕を映して','Your body or shooting arm is hard to see. Check camera position and obstructions']};
  return {code,text:{ja:phrases[code][0],en:phrases[code][1]},reason:'直近5秒の姿勢フレームの60%以上で撮影上の問題を観測'};
 }
