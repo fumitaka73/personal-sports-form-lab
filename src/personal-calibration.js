@@ -1,7 +1,7 @@
 import {iterateChunks} from './pose-archive.js';
 import {SESSION_POSE_THRESHOLDS} from './session.js';
 import {ShotDetector} from './shot-detector.js';
-import {COACH_RULES,selectCoachFeedback} from './coach-feedback.js';
+import {COACH_RULES,selectCoachFeedback,selectLegacyCoachFeedback} from './coach-feedback.js';
 export const CALIBRATION_SCHEMA='personal-calibration-1';
 export const CALIBRATION_ENGINE='personal-rules-1';
 export const EVIDENCE_MIN={sessions:2,detectTrainShots:20,detectValidationShots:10,feedbackTrain:20,feedbackValidation:10};
@@ -46,6 +46,7 @@ export function compareDetection(sessions,cases,baseline=defaultParameters().det
  const exclusions=[],usable=[];for(const s of sessions){const reason=usableDetectionSession(s,cases);if(reason)exclusions.push({id:s.id,reason});else usable.push(s);}
  const training=usable.filter(s=>s.split==='training'),validation=usable.filter(s=>s.split==='validation');
  const result={kind:'detector',trainingIds:training.map(s=>s.id),validationIds:validation.map(s=>s.id),exclusions,candidates:[],recommended:null,baselineParameters:baseline};
+ result.progress={training:{sessions:training.length,items:training.reduce((n,s)=>n+s.truth.events.length,0),requiredSessions:2,requiredItems:20},validation:{sessions:validation.length,items:validation.reduce((n,s)=>n+s.truth.events.length,0),requiredSessions:2,requiredItems:10}};
  if(training.some(s=>validation.some(v=>v.id===s.id))){result.reason='同じセッションを学習と検証に使えません。';return result;}
  if(training.length<EVIDENCE_MIN.sessions||validation.length<EVIDENCE_MIN.sessions||training.reduce((n,s)=>n+s.truth.events.length,0)<EVIDENCE_MIN.detectTrainShots||validation.reduce((n,s)=>n+s.truth.events.length,0)<EVIDENCE_MIN.detectValidationShots){result.reason='データ不足：学習・検証それぞれ2セッション、実シュート20本／10本が必要です。';return result;}
  // Candidate selection uses training only. Validation does not rank candidates.
@@ -58,11 +59,12 @@ export function compareDetection(sessions,cases,baseline=defaultParameters().det
  if(improveDetection(result.before.validation,best.validation)){result.recommended=best;result.reason='独立した検証データでもF1が改善し、見逃し・誤検出は増えませんでした。';}else result.reason='検証データで改善が確認できないため、変更を推奨しません。';return result;
 }
 const metricLabel={kneeAngle:'dip',kneeArmTiming:'timing',wristHeight:'release',elbowAngle:'elbow',shoulderAngle:'elbow',torsoLean:'balance',bodyOffset:'balance',hipAngle:'balance',verticalRise:'balance',armLead:'timing',wristPeakTiming:'timing',followWrist:'follow',followElbow:'follow'};
-function semantic(f){return f.trigger?`${f.trigger.key}:${Math.sign(f.trigger.delta)}`:['good','perfect'].includes(f.code)?'praise':f.code;}
+function semantic(f){if(f.triggers?.length)return f.triggers.map(t=>`${t.key}:${Math.sign(t.delta)}`).sort().join('|');return f.trigger?`${f.trigger.key}:${Math.sign(f.trigger.delta)}`:['good','perfect'].includes(f.code)?'praise':f.code;}
 function appropriateness(c,f){
  const original=c.appFeedback?.original,rating=c.labels.feedbackRating;
  if(!f.speak)return 'silent';
  if(original&&semantic(original)===semantic(f)){if(rating==='useful')return 'good';if(rating==='inaccurate')return 'bad';if(rating==='repetitive')return 'repeated';}
+ if(f.triggers?.length>1)return 'unknown';
  if(!f.trigger)return 'unknown';
  const label=c.labels.submetrics?.[metricLabel[f.trigger.key]];
  if(!label||['unreviewed','not-assessable'].includes(label))return 'unknown';
@@ -76,7 +78,7 @@ function appropriateness(c,f){
 const feedbackEligible=c=>c.labels.detection==='correct'&&c.comparison.confidence!=='Low'&&(!c.labels.conditions||['shotType','cameraAngle','hand'].every(k=>c.labels.conditions[k]===c.metadata[k]));
 export function feedbackMetrics(cases,parameters,sessions){
  const totals={good:0,bad:0,repeated:0,unknown:0,silent:0,reviewed:0},ordered=[...cases].sort((a,b)=>a.source.recordId.localeCompare(b.source.recordId)||a.createdAt-b.createdAt||a.source.shotNumber-b.source.shotNumber);let current=null,recent=[];
- for(const c of ordered){if(c.source.recordId!==current){current=c.source.recordId;recent=[];}const s=sessions.find(s=>s.id===current),now=c.createdAt,f=selectCoachFeedback(c.comparison,{focus:s?.focus??c.appFeedback.original?.focus??'automatic',recent,now,shotNumber:recent.length+1,thresholds:s?.feedbackThresholds??COACH_RULES,parameters});recent.push({number:recent.length+1,timestamp:now,coachFeedback:f});
+ for(const c of ordered){if(c.source.recordId!==current){current=c.source.recordId;recent=[];}const s=sessions.find(s=>s.id===current),now=c.createdAt,f=(c.appFeedback.original?.version==='live-coach-0.6'?selectCoachFeedback:selectLegacyCoachFeedback)(c.comparison,{trunkEstimate:c.trunkEstimate,metricReliability:c.analysis?.voiceReliability,focus:s?.focus??c.appFeedback.original?.focus??'automatic',recent,now,shotNumber:recent.length+1,thresholds:s?.feedbackThresholds??COACH_RULES,parameters});recent.push({number:recent.length+1,timestamp:now,coachFeedback:f});
   if(!feedbackEligible(c)||!['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating))continue;totals.reviewed++;totals[appropriateness(c,f)]++;
  }
  const known=totals.good+totals.bad+totals.repeated;return {...totals,known,agreement:known?totals.good/known:null};
@@ -88,7 +90,7 @@ export function compareFeedback(cases,sessions,baseline=defaultParameters().feed
  const train=eligible.filter(c=>trainIds.includes(c.source.recordId)),val=eligible.filter(c=>valIds.includes(c.source.recordId));
  const result={kind:'feedback',trainingIds:trainIds,validationIds:valIds,baselineParameters:baseline,candidates:[],recommended:null};
  if(trainIds.some(id=>valIds.includes(id))){result.reason='同じセッションを学習と検証に使えません。';return result;}
- const before={training:feedbackMetrics(train,baseline,sessions),validation:feedbackMetrics(val,baseline,sessions)};
+ const before={training:feedbackMetrics(train,baseline,sessions),validation:feedbackMetrics(val,baseline,sessions)};const reviewedSessionCount=group=>new Set(group.filter(c=>feedbackEligible(c)&&['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating)).map(c=>c.source.recordId)).size;result.progress={training:{sessions:reviewedSessionCount(train),items:before.training.reviewed,requiredSessions:2,requiredItems:20},validation:{sessions:reviewedSessionCount(val),items:before.validation.reviewed,requiredSessions:2,requiredItems:10}};
  if(new Set(train.filter(c=>feedbackEligible(c)&&['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating)).map(c=>c.source.recordId)).size<2||new Set(val.filter(c=>feedbackEligible(c)&&['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating)).map(c=>c.source.recordId)).size<2||before.training.reviewed<EVIDENCE_MIN.feedbackTrain||before.validation.reviewed<EVIDENCE_MIN.feedbackValidation){result.reason='音声ラベル不足：学習・検証それぞれ2セッション、評価済み20件／10件が必要です。';return result;}
  result.before=before;
  const weights={...baseline.priorityWeights};for(const c of train){const key=c.appFeedback.original?.trigger?.key;if(!key||!feedbackEligible(c))continue;const matches=train.filter(v=>feedbackEligible(v)&&v.appFeedback.original?.trigger?.key===key),useful=matches.filter(v=>v.labels.feedbackRating==='useful').length,inaccurate=matches.filter(v=>v.labels.feedbackRating==='inaccurate').length;if(useful+inaccurate>=5)weights[key]=inaccurate>useful?.75:1.25;}

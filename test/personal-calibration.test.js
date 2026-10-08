@@ -4,7 +4,7 @@ import {frames} from '../test-support/shot-frames.js';
 import {packFrame,unpackChunks,PoseArchive,POSE_STRIDE} from '../src/pose-archive.js';
 import {exportPoseTrace,readPoseTrace} from '../src/pose-backup.js';
 import {defaultParameters,validateParameters,reviewFingerprint,compareDetection,replayDetection,compareFeedback,validateCalibrationBackup,CALIBRATION_ENGINE,CALIBRATION_SCHEMA,scopeKey,detectionMetrics} from '../src/personal-calibration.js';
-import {selectCoachFeedback} from '../src/coach-feedback.js';
+import {selectLegacyCoachFeedback as selectCoachFeedback} from '../src/coach-feedback.js';
 const metadata={shotType:'jump',cameraAngle:'side',hand:'right'};
 function dataset(weak=true){
  const cases=[],sessions=[];

@@ -5,7 +5,7 @@ import {calculateMetrics} from '../src/metrics.js';
 import {reviewShot} from '../src/shot-engine.js';
 import {analyzeCompletedShot,compactAnalysis} from '../src/coach-analysis.js';
 import {ShotDetector} from '../src/shot-detector.js';
-import {selectCoachFeedback,coachDeviations} from '../src/coach-feedback.js';
+import {selectLegacyCoachFeedback as selectCoachFeedback,coachDeviations} from '../src/coach-feedback.js';
 import {summarizeCoach,buildCoachInput} from '../src/coach-summary.js';
 import {CoachVoice} from '../src/coach-voice.js';
 const meta={shotType:'jump',cameraAngle:'side',hand:'right'},phases={start:0,release:1,end:2};

@@ -1,3 +1,4 @@
+import {trunkProfile} from './trunk-proxy.js';
 import { ANALYSIS_VERSION, METRICS, GROUPS } from './scoring-config.js';
 const finite = Number.isFinite;
 const mean = values => { const a = values.filter(finite); return a.length ? a.reduce((s, v) => s + v, 0) / a.length : null; };
@@ -111,7 +112,7 @@ export function calculateMetrics(frames, phases, hand, aspect = 1, phaseEstimate
   const missingMetrics = Object.values(metrics).filter(v => !finite(v)).length;
   const lowQuality = completeCoverage < 0.8 || coverage < 0.65 || rows.length < 10 || visibility < 0.55 || weakMotion || releaseFallback || phaseEstimated || missingMetrics > 3 || Math.max(0, ...gaps) > 0.35;
   if (visibility < 0.55 && rows.length) warnings.push('関節の検出確度が低いため、精度低の参考値として表示します。');
-  return { version: ANALYSIS_VERSION, metrics, phases, hand, aspect, coverage, completeCoverage, visibility, lowQuality, warnings, phaseEstimated, frameCount: frames.length, validFrames: rows.length, frames, analyzedAt: Date.now() };
+  return { version: ANALYSIS_VERSION, metrics, phases, hand, aspect, coverage, completeCoverage, visibility, lowQuality, warnings, phaseEstimated, frameCount: frames.length, validFrames: rows.length, frames, trunkProfile:trunkProfile(frames,phases,aspect), analyzedAt: Date.now() };
 }
 export function compareAnalyses(reference, current, refMeta, newMeta) {
   const angleMismatch = refMeta.cameraAngle !== newMeta.cameraAngle, shotMismatch = refMeta.shotType !== newMeta.shotType;

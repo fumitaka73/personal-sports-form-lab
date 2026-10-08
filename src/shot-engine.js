@@ -1,3 +1,4 @@
+import {estimateTrunk,referenceTrunk} from './trunk-proxy.js';
 import { compareAnalyses, calculateMetrics } from './metrics.js';
 import { evaluateCheckpoints } from './checkpoints.js';
 import { generateFeedback } from './feedback.js';
@@ -11,7 +12,7 @@ export function reviewShot(referenceAnalysis, analysis, referenceMeta, metadata,
     if(policy.confidence!=='Low')comparison.warnings=comparison.warnings.filter(w=>!w.startsWith('精度低：'));
     comparison.warnings.push('ライブのリリース時刻は推定です。姿勢計測の品質と時刻の確度を分けて表示し、分析信頼度は最大Mediumに制限しています。');
   }
-  return { comparison, checkpointReview: evaluateCheckpoints(analysis, metadata, referenceAnalysis, referenceMeta), feedback: generateFeedback(comparison) };
+  return { trunkEstimate:estimateTrunk(referenceTrunk(analysis),referenceTrunk(referenceAnalysis),metadata.cameraAngle,referenceMeta.cameraAngle),comparison, checkpointReview: evaluateCheckpoints(analysis, metadata, referenceAnalysis, referenceMeta), feedback: generateFeedback(comparison) };
 }
 
 export function liveComparisonConfidence(reference,current,referenceMeta,metadata){

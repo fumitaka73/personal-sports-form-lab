@@ -30,7 +30,7 @@ export function coachDeviations(comparison,parameters={}){
  if(comparison.confidence==='Low')return [];
  return comparison.metrics.filter(m=>!m.excluded&&Number.isFinite(m.delta)&&m.tolerance>0).map(m=>({...m,normalizedDeviation:Math.abs(m.delta)/m.tolerance,code:codeFor(m),priority:Math.abs(m.delta)/m.tolerance*(m.weight??1)*(GROUPS[m.group]?.weight??1)*(rules.priorityWeights?.[m.key]??1)})).filter(m=>m.code&&m.normalizedDeviation>=rules.meaningfulDeviation).sort((a,b)=>b.priority-a.priority||a.key.localeCompare(b.key));
 }
-export function selectCoachFeedback(comparison,{focus='automatic',recent=[],now=Date.now(),shotNumber=recent.length+1,thresholds=COACH_RULES,parameters={}}={}){
+export function selectLegacyCoachFeedback(comparison,{focus='automatic',recent=[],now=Date.now(),shotNumber=recent.length+1,thresholds=COACH_RULES,parameters={}}={}){
  const rules={...COACH_RULES,...parameters};
  let code,trigger=null,reason;
  const good=Number.isFinite(thresholds.good)?Math.max(0,Math.min(100,thresholds.good)):COACH_RULES.good,perfect=Number.isFinite(thresholds.perfect)?Math.max(good,Math.min(100,thresholds.perfect)):COACH_RULES.perfect;
@@ -50,4 +50,29 @@ export function selectCoachFeedback(comparison,{focus='automatic',recent=[],now=
  const last=[...recent].reverse().find(s=>s.coachFeedback?.code===code&&s.coachFeedback.speak);
  const repeated=(!trigger||rules.suppressCorrections)&&last&&(shotNumber-last.number<rules.repeatShots||now-last.timestamp<rules.cooldownMs);
  return {version:COACH_RULES.version,code,text:{ja,en},repeatCount,reason,focus,trigger:trigger?{key:trigger.key,label:trigger.label,delta:trigger.delta,tolerance:trigger.tolerance,unit:trigger.unit,normalizedDeviation:trigger.normalizedDeviation,threshold:rules.meaningfulDeviation}:null,speak:!repeated,suppressedReason:repeated?'同じ助言の連続を抑えるため音声を省略しました。':null};
+}
+
+// One utterance; additive wrapper leaves historical rule replay available.
+export function selectCoachFeedback(comparison,options={}){
+ const {trunkEstimate,parameters={},recent=[],now=Date.now(),shotNumber=recent.length+1,focus='automatic'}=options;
+ const original=selectLegacyCoachFeedback(comparison,options),phrasesShort={legs:['ディップ浅い','Dip shallow'],deep:['ディップ深い','Dip deep'],higher:['リリース低い','Release low'],lowerRelease:['リリース高い','Release high'],elbow:['肘の位置','Elbow position'],elbowRelax:['肘の位置','Elbow position'],arm:['肘の位置','Elbow position'],armWide:['肘の位置','Elbow position'],balance:['バランス','Balance'],lower:['脚と腕のタイミング','Leg and arm timing'],rhythm:['腕のタイミング','Arm timing'],follow:['腕キープ','Hold arm'],legsLate:['脚が遅い','Legs late'],legsEarly:['脚が早い','Legs early'],armEarly:['腕が早い','Arm early'],armLate:['腕が遅い','Arm late'],peakLate:['腕が遅い','Arm late'],peakEarly:['腕が早い','Arm early'],riseHigh:['伸び上がり大きい','Rise large'],riseLow:['伸び上がり小さい','Rise small']};
+ const rules={...COACH_RULES,...parameters};let choices=[];
+ // Preserve the selected Good/Perfect gates; never inflate the numerical score.
+ if(original.trigger||coachDeviations(comparison,parameters).some(m=>inCoachFocus(m,focus)&&m.normalizedDeviation>rules.smallDeviation))choices=coachDeviations(comparison,parameters).filter(m=>inCoachFocus(m,focus)).map(m=>({key:m.key,delta:m.delta,code:m.code,priority:m.priority,confidence:options.metricReliability?.[m.key]??comparison.confidence,...Object.fromEntries(['label','tolerance','unit','normalizedDeviation'].map(k=>[k,m[k]]))}));
+ if(trunkEstimate?.audioEligible)choices.push({key:'trunkExtension',delta:trunkEstimate.excess,code:'back',priority:Math.max(.5,trunkEstimate.excess/8),confidence:trunkEstimate.confidence,label:'体幹後傾・伸展の代理指標'});
+ const ordered=choices.sort((a,b)=>b.priority-a.priority||a.key.localeCompare(b.key));const unique=ordered.filter((m,i)=>ordered.findIndex(v=>(phrasesShort[v.code]?.[0]??v.code)===(phrasesShort[m.code]?.[0]??m.code))===i);
+ const valid=unique.filter(m=>['High','Medium'].includes(m.confidence)).slice(0,2);
+ const signature=m=>m.key+':'+Math.sign(m.delta);
+ const lastFor=m=>[...recent].reverse().find(s=>s.coachFeedback?.speak&&(s.coachFeedback.triggers??(s.coachFeedback.trigger?[s.coachFeedback.trigger]:[])).some(t=>signature(t)===signature(m)));
+ // Approved longer repetition settings win. A short safety cooldown applies to all new corrections.
+ const unsuppressed=valid.filter(m=>{const last=lastFor(m);if(!last)return true;const cooldown=Math.max(3000,rules.cooldownMs),shots=m.key==='trunkExtension'?Math.max(2,rules.repeatShots):rules.suppressCorrections?rules.repeatShots:1;return now-last.timestamp>=cooldown&&shotNumber-last.number>=shots;});
+ let output={...original,version:'live-coach-0.6',triggers:[],combined:false};
+ if(valid.length){const selected=unsuppressed;const voiced=selected.length?selected:valid;output={...output,code:voiced[0].code,trigger:voiced[0],triggers:voiced,combined:voiced.length===2,text:{ja:voiced.map(m=>m.code==='back'?'腰反りすぎ':phrasesShort[m.code]?.[0]??'フォーム確認').join('、'),en:voiced.map(m=>m.code==='back'?'Back extension':phrasesShort[m.code]?.[1]??'Check form').join(', ')},speak:selected.length>0,reason:voiced.map(m=>m.key==='trunkExtension'?trunkEstimate.reason:`${m.label}: Good Formとの差 ${m.delta?.toFixed(3)}、許容差比 ${m.normalizedDeviation?.toFixed(2)}`).join(' / '),suppressedReason:selected.length<valid.length?'同じ指摘の短い間隔での繰り返しを抑えました。':null};}
+ else if(original.trigger){output.speak=false;output.reason+=' 項目別の追跡根拠が弱いため、画面の参考表示だけにします。';output.text={ja:phrasesShort[original.code]?.[0]??'フォーム確認',en:phrasesShort[original.code]?.[1]??'Check form'};}
+ else if(['good','perfect'].includes(original.code)){
+  const evidence=comparison.overall>=(Number.isFinite(options.thresholds?.good)?options.thresholds.good:COACH_RULES.good)&&comparison.metrics.some(m=>!m.excluded&&Number.isFinite(m.delta)&&inCoachFocus(m,focus)&&['High','Medium'].includes(options.metricReliability?.[m.key]??comparison.confidence));
+  if(!evidence||trunkEstimate?.alert){output={...output,code:'reference',text:{ja:'フォーム確認',en:'Check form'},speak:false,reason:'十分な比較根拠がない、または独立した体幹の注意点があるため称賛を控えます。'};}
+  else output.text={ja:original.code==='perfect'?'パーフェクト！':'グッド！',en:original.code==='perfect'?'Perfect!':'Good!'};
+ }
+ return output;
 }
