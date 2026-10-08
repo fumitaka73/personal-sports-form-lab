@@ -25,8 +25,13 @@ test('feedback chooses one meaningful correction with direction, focus and posit
  assert.equal(selectCoachFeedback(comparison(100)).code,'perfect');assert.equal(selectCoachFeedback(comparison(90,'Medium',-.1)).code,'good');assert.equal(selectCoachFeedback(comparison()).code,'higher');assert.equal(selectCoachFeedback(comparison(),{focus:'elbow'}).code,'good');
  assert.equal(selectCoachFeedback(comparison(70,'Medium',.4)).code,'lowerRelease');assert.equal(selectCoachFeedback(comparison(30,'Low')).code,'view');assert.equal(coachDeviations({...comparison(),metrics:[{key:'followWrist',group:'follow',delta:-1,tolerance:.3}]}).length,0);
 });
-test('cooldown mutes next identical message, repeats later and allows latest different correction',()=>{
- const c=comparison(),first=selectCoachFeedback(c,{now:10000,shotNumber:1}),recent=[{number:1,timestamp:10000,coachFeedback:first}];assert.equal(first.speak,true);assert.equal(selectCoachFeedback(c,{recent,now:14000,shotNumber:2}).speak,false);assert.equal(selectCoachFeedback(c,{recent,now:16000,shotNumber:3}).speak,true);assert.equal(selectCoachFeedback(comparison(70,'Medium',.4),{recent,now:10100,shotNumber:2}).speak,true);assert.equal(selectCoachFeedback(c,{recent,now:11000,shotNumber:3}).speak,false);
+test('persistent corrections speak every shot with varied wording; praise retains cooldown',()=>{
+ const c=comparison(),first=selectCoachFeedback(c,{now:10000,shotNumber:1}),recent=[{number:1,timestamp:10000,coachFeedback:first}];
+ const second=selectCoachFeedback(c,{recent,now:11000,shotNumber:2});assert.equal(second.speak,true);assert.equal(second.text.ja,'まだリリースが低めです');assert.equal(second.repeatCount,2);
+ recent.push({number:2,timestamp:11000,coachFeedback:second});const third=selectCoachFeedback(c,{recent,now:12000,shotNumber:3});assert.equal(third.speak,true);assert.notEqual(third.text.ja,second.text.ja);assert.equal(third.repeatCount,3);
+ const changed=selectCoachFeedback(comparison(70,'Medium',.4),{recent,now:12100,shotNumber:3});assert.equal(changed.text.ja,'リリースを少し低く');assert.equal(changed.repeatCount,1);
+ const praise=selectCoachFeedback(comparison(100),{now:20000});assert.equal(selectCoachFeedback(comparison(100),{recent:[{number:1,timestamp:20000,coachFeedback:praise}],now:21000,shotNumber:2}).speak,false);
+ const low=selectCoachFeedback(comparison(30,'Low'),{recent,now:12100,shotNumber:3});assert.equal(low.code,'view');assert.equal(low.trigger,null);assert.equal(low.repeatCount,1);
 });
 test('COMPLETE events are delivered once even with pose loss and many follow-through frames',()=>{
  const d=new ShotDetector({live:true}),events=[];for(const f of frames())events.push(...d.processFrame(f.time*1000,f.landmarks).events);for(let i=25;i<80;i++)events.push(...d.processFrame(i/12*1000,i===30?null:frames().at(-1).landmarks).events);assert.equal(events.length,1);assert.equal(d.count,1);
