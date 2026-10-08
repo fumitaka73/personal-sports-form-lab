@@ -41,3 +41,11 @@ test('two-item feedback requires independent strong landmark evidence for each i
  const f=selectCoachFeedback(comparison,{metricReliability:reliability});assert.equal(f.triggers.length,1);assert.equal(f.triggers[0].key,'wristHeight');assert.equal(f.text.ja,'リリース低い');
  const p=selectCoachFeedback({...comparison,overall:100,metrics:comparison.metrics.map(m=>({...m,delta:0}))},{metricReliability:Object.fromEntries(comparison.metrics.map(m=>[m.key,'Low']))});assert.equal(p.speak,false);
 });
+
+test('imported compact Good Form retains reliable single-cue coaching without inventing two-item evidence',()=>{
+ const reliability=coachMetricReliability(series(),undefined,'right','Medium');const f=selectCoachFeedback(comparison,{metricReliability:reliability,maxItems:1,trunkEstimate:evaluate(series(.15))});assert.equal(f.triggers.length,1);assert.equal(f.speak,true);
+});
+
+test('malformed new pose profiles are rejected before replacing any saved data',()=>{
+ const analysis=calculateMetrics(series(),phases,'right'),r=reviewShot(analysis,analysis,metadata,metadata),session={id:'s',createdAt:1,metadata,goodFormReference:{id:'g',title:'基準',...metadata,analysis},shots:[{number:1,analysis,...r}]};const data=JSON.parse(JSON.stringify(exportReviewData(emptyReviewData(),collectCases([],[],[session]))));data.data.cases['live:s:1'].analysis.trunkProfile.rows=[null];assert.throws(()=>validateReviewImport(data));
+});

@@ -61,7 +61,7 @@ export function selectCoachFeedback(comparison,options={}){
  if(original.trigger||coachDeviations(comparison,parameters).some(m=>inCoachFocus(m,focus)&&m.normalizedDeviation>rules.smallDeviation))choices=coachDeviations(comparison,parameters).filter(m=>inCoachFocus(m,focus)).map(m=>({key:m.key,delta:m.delta,code:m.code,priority:m.priority,confidence:options.metricReliability?.[m.key]??comparison.confidence,...Object.fromEntries(['label','tolerance','unit','normalizedDeviation'].map(k=>[k,m[k]]))}));
  if(trunkEstimate?.audioEligible)choices.push({key:'trunkExtension',delta:trunkEstimate.excess,code:'back',priority:Math.max(.5,trunkEstimate.excess/8),confidence:trunkEstimate.confidence,label:'体幹後傾・伸展の代理指標'});
  const ordered=choices.sort((a,b)=>b.priority-a.priority||a.key.localeCompare(b.key));const unique=ordered.filter((m,i)=>ordered.findIndex(v=>(phrasesShort[v.code]?.[0]??v.code)===(phrasesShort[m.code]?.[0]??m.code))===i);
- const valid=unique.filter(m=>['High','Medium'].includes(m.confidence)).slice(0,2);
+ const valid=unique.filter(m=>['High','Medium'].includes(m.confidence)).slice(0,options.maxItems===1?1:2);
  const signature=m=>m.key+':'+Math.sign(m.delta);
  const lastFor=m=>[...recent].reverse().find(s=>s.coachFeedback?.speak&&(s.coachFeedback.triggers??(s.coachFeedback.trigger?[s.coachFeedback.trigger]:[])).some(t=>signature(t)===signature(m)));
  // Approved longer repetition settings win. A short safety cooldown applies to all new corrections.
