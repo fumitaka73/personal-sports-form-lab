@@ -27,11 +27,12 @@ export const getSetting = id => transact('settings', 'readonly', store => store.
 export const setSetting = (id, value) => transact('settings', 'readwrite', store => store.put({ id, value }));
 export const deleteResult = id => transact('results', 'readwrite', store => store.delete(id));
 // Store video, reference pointer, and result atomically: quota errors leave no partial records.
-export async function commitAnalysis(video, referenceId, result = null) {
+export async function commitAnalysis(video, referenceId, result = null, reviewData = null) {
   const db = await database;
   return new Promise((resolve, reject) => {
     const tx = db.transaction(['videos', 'results', 'settings'], 'readwrite');
     tx.objectStore('videos').put(video);
+    if(reviewData)tx.objectStore('settings').put({id:'review-v04',value:reviewData});
     if (result) tx.objectStore('results').put(result);
     else tx.objectStore('settings').put({ id: 'referenceId', value: referenceId });
     tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
