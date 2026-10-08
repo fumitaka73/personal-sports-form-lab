@@ -1,7 +1,7 @@
 const database = new Promise((resolve, reject) => {
-  const request = indexedDB.open('sports-form-lab', 3);
+  const request = indexedDB.open('sports-form-lab', 4);
   request.onupgradeneeded = () => {
-    for (const name of ['videos', 'results', 'settings', 'temporaryVideos']) {
+    for (const name of ['videos', 'results', 'settings', 'temporaryVideos', 'poseSessions', 'poseChunks', 'calibrations']) {
       if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name, { keyPath: 'id' });
     }
   };
@@ -54,3 +54,17 @@ export const saveCoachSession = session => transact('results', 'readwrite', stor
 export const listTemporaryVideos = () => transact('temporaryVideos','readonly',s=>s.getAll());
 export const saveTemporaryVideo = row => transact('temporaryVideos','readwrite',s=>s.put(row));
 export const deleteTemporaryVideo = id => transact('temporaryVideos','readwrite',s=>s.delete(id));
+
+export const listPoseSessions=()=>transact('poseSessions','readonly',s=>s.getAll());
+export const savePoseSession=row=>transact('poseSessions','readwrite',s=>s.put(row));
+export const listCalibrations=()=>transact('calibrations','readonly',s=>s.getAll());
+export const getCalibration=id=>transact('calibrations','readonly',s=>s.get(id));
+export async function savePoseChunk(chunk,session){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction(['poseChunks','poseSessions'],'readwrite');tx.objectStore('poseChunks').put(chunk);tx.objectStore('poseSessions').put(session);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
+}
+export async function loadPoseChunks(id){const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('poseChunks','readonly'),r=tx.objectStore('poseChunks').getAll(IDBKeyRange.bound(id+':',id+':\uffff'));tx.oncomplete=()=>resolve(r.result.sort((a,b)=>a.index-b.index));tx.onerror=()=>reject(tx.error);});}
+export async function deletePoseSession(id){const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction(['poseChunks','poseSessions'],'readwrite');tx.objectStore('poseChunks').delete(IDBKeyRange.bound(id+':',id+':\uffff'));tx.objectStore('poseSessions').delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
+// Approval and pointer update are atomic. Imported versions are never activated.
+export async function commitCalibration(version){const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction(['calibrations','settings'],'readwrite');tx.objectStore('calibrations').add(version);tx.objectStore('settings').put({id:'active-calibration:'+version.scope,value:version.id});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
+export async function activeCalibration(scope){const pointer=await getSetting('active-calibration:'+scope);return pointer?.value?getCalibration(pointer.value):null;}
+export async function importCalibrations(records){const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('calibrations','readwrite'),store=tx.objectStore('calibrations');for(const row of records){const r=store.get(row.id);r.onsuccess=()=>{if(!r.result)store.add(row);};}tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}

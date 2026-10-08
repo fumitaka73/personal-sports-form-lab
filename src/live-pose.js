@@ -14,7 +14,7 @@ export function mountLivePose(container,options={}){
  let stream=null,engine=null,sendPromise=null,running=false,disposed=false,token=0,raf=null,videoCallback=null,facing='environment',mirror=false,landmarks=null,lastPoseAt=-Infinity,lastInference=-Infinity,lastVideoTime=-1,lastCameraTime=-1,lastUI=0,edge=480;
  let cameraSamples=[],cameraCounter=0,poseTimes=[],durations=[],detector=null,metrics=liveMetrics(null);
  const text=(id,value)=>{const node=el(id);if(node&&node.textContent!==String(value))node.textContent=value;};
- function resetDetector(){detector=new ShotDetector({hand:el('live-hand').value,aspect:video.videoWidth/video.videoHeight||1,live:true});text('live-shot-count','0');text('live-detector-state','IDLE');text('live-shot-notice','');}
+ function resetDetector(){detector=new ShotDetector({hand:el('live-hand').value,aspect:video.videoWidth/video.videoHeight||1,live:true,parameters:options.detectorParameters?.()});text('live-shot-count','0');text('live-detector-state','IDLE');text('live-shot-notice','');}
  function updateButtons(pending=false){if(disposed)return;el('live-start').disabled=running||pending;el('live-stop').disabled=!running&&!pending;el('live-switch').disabled=pending;}
  function countCamera(now,frames=++cameraCounter){cameraSamples.push({time:now,frames});while(cameraSamples.length>2&&cameraSamples[1].time<now-1000)cameraSamples.shift();}
  function watchCamera(id){if(!video.requestVideoFrameCallback)return;videoCallback=video.requestVideoFrameCallback((now,metadata)=>{if(id!==token||!running)return;countCamera(now,metadata.presentedFrames);watchCamera(id);});}

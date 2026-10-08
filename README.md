@@ -295,3 +295,10 @@ Evaluation & JSONでは手動検証データの精度・再現率、一致率、
 ## v0.4 Video Review & Human-in-the-Loop
 
 Live Coachの明示録画、IndexedDB一時動画、Session Review、Keep／書き出し、見逃し追加、修正履歴を追加しました。[iPhone操作・保存仕様・検証手順](docs/v04-video-review.md)を参照してください。閾値の学習キャリブレーションはPhase 2です。
+
+
+## v0.5 Personal Calibration（VERSION 0.13）
+
+Live Coachの軽量姿勢時系列を動画と独立して保存し、人間の検出・音声レビューから閾値と助言ルールの候補を比較します。学習と検証をセッション単位で分離し、両側で改善した案だけを明示承認できます。承認版は次回Live Coachに適用し、過去版・標準ルールに戻せます。既存の点数・分析・レビューは保持します。「動画・メモ」は「保存済み動画・メモ」に変更しました。
+
+[iPhone操作・保存形式・評価条件・制約](docs/v05-personal-calibration.md)を参照してください。旧データの検出再評価には姿勢が必要ですが、既存の音声ラベルは利用できます。
