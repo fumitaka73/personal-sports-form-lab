@@ -290,3 +290,8 @@ Good Form Calibrationでは種別・撮影角度ごとに複数の基準を登�
 Evaluation & JSONでは手動検証データの精度・再現率、一致率、点数／信頼度の分布、種別ごとの修正頻度を表示します。再現率には練習全体の実際の本数と全候補の確認が必要です。JSONは計測・基準・原文・ラベルを移行しますが元動画を含みません。同じIDは上書きせず既存を保持します。
 
 保存形式、評価の分母、JSON仕様、検証方法と制約は [docs/v0.4-shot-review.md](docs/v0.4-shot-review.md) に記載しています。iPhone実機での検証・実際の精度向上の確認はまだ行っていません。
+
+
+## v0.4 Video Review & Human-in-the-Loop
+
+Live Coachの明示録画、IndexedDB一時動画、Session Review、Keep／書き出し、見逃し追加、修正履歴を追加しました。[iPhone操作・保存仕様・検証手順](docs/v04-video-review.md)を参照してください。閾値の学習キャリブレーションはPhase 2です。

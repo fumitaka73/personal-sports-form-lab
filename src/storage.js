@@ -1,7 +1,7 @@
 const database = new Promise((resolve, reject) => {
-  const request = indexedDB.open('sports-form-lab', 2);
+  const request = indexedDB.open('sports-form-lab', 3);
   request.onupgradeneeded = () => {
-    for (const name of ['videos', 'results', 'settings']) {
+    for (const name of ['videos', 'results', 'settings', 'temporaryVideos']) {
       if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name, { keyPath: 'id' });
     }
   };
@@ -50,3 +50,7 @@ export async function commitSession(video, sessions) {
 }
 
 export const saveCoachSession = session => transact('results', 'readwrite', store => store.put(session));
+
+export const listTemporaryVideos = () => transact('temporaryVideos','readonly',s=>s.getAll());
+export const saveTemporaryVideo = row => transact('temporaryVideos','readwrite',s=>s.put(row));
+export const deleteTemporaryVideo = id => transact('temporaryVideos','readwrite',s=>s.delete(id));

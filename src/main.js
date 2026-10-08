@@ -1,3 +1,4 @@
+import {expireTemporaryVideos} from './video-review.js';
 import {mountReviewHub} from './review-ui.js';
 import {emptyReviewData,collectCases,referenceCatalog} from './review-data.js';
 import './style.css';
@@ -27,7 +28,7 @@ let videos = [], results = [], referenceId = null, activePage = 'good', activeRe
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
 app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.11 · SHOT REVIEW v0.4</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
+<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.12 · SHOT REVIEW v0.4</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
 <nav class="tabs" aria-label="画面選択"><button data-page="good">01 Good Form</button><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="coach">Live Coach</button><button data-page="live">Live Pose (Beta)</button><button data-page="results">03 比較結果</button><button data-page="review">Shot Review / Calibration</button><button data-page="history">履歴</button><button data-page="library">動画・メモ</button></nav>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
@@ -60,7 +61,7 @@ function renderReview(){
  const sessionTargets=[...sessions.map(s=>({mode:'session',recordId:s.id,title:s.title,appFeedback:{text:[...new Set(s.shots.flatMap(shot=>shot.feedback?.focus??[]))].join('\n')||'助言なし',summary:s.summary,shots:s.shots.map(shot=>({number:shot.number,feedback:shot.feedback}))}})),...coachSessions.map(s=>({mode:'live',recordId:s.id,title:s.goodFormReference.title,appFeedback:{text:[...new Set(s.shots.map(shot=>shot.coachFeedback?.text?.ja).filter(Boolean))].join('\n')||'助言なし',summary:s.summary,shots:s.shots.map(shot=>({number:shot.number,feedback:shot.coachFeedback}))}}))];
  for(const entry of Object.values(reviewData.sessionFeedback))if(!sessionTargets.some(s=>s.mode===entry.mode&&s.recordId===entry.recordId))sessionTargets.push(entry);
  for(const c of cases)if(c.source.mode!=='single'&&!sessionTargets.some(s=>s.mode===c.source.mode&&s.recordId===c.source.recordId))sessionTargets.push({mode:c.source.mode,recordId:c.source.recordId,title:'移行したセッション',appFeedback:{text:'元のセッションまとめはN/A'}});
- cleanup=mountReviewHub(screen,{data:{...reviewData,references:catalog()},cases,sessionTargets,videos,activeReferenceId:referenceId,initialCaseId:reviewCaseId,onDirty:value=>noteDirty=value,onSave:async data=>{busy=true;try{await setSetting('review-v04',data);reviewData=data;}finally{busy=false;}},onActivateReference:async id=>{await setSetting('referenceId',id);referenceId=id;},getVideoUrl:c=>{const video=videos.find(v=>v.id===c.source.videoId);if(!video?.blob)return null;if(!videoUrls.has(video.id))videoUrls.set(video.id,url(video.blob));return videoUrls.get(video.id);}});reviewCaseId=null;
+ cleanup=mountReviewHub(screen,{data:{...reviewData,references:catalog()},cases,sessionTargets,videos,manualTemplate:id=>{const s=coachSessions.find(s=>s.id===id);return s?{source:{mode:'live',recordId:id},metadata:s.metadata,goodFormReference:s.goodFormReference,scoreVersion:s.version}:null;},activeReferenceId:referenceId,initialCaseId:reviewCaseId,onDirty:value=>noteDirty=value,onSave:async data=>{busy=true;try{await setSetting('review-v04',data);reviewData=data;}finally{busy=false;}},onActivateReference:async id=>{await setSetting('referenceId',id);referenceId=id;},getVideoUrl:c=>{const video=videos.find(v=>v.id===c.source.videoId);if(!video?.blob)return null;if(!videoUrls.has(video.id))videoUrls.set(video.id,url(video.blob));return videoUrls.get(video.id);}});reviewCaseId=null;
 }
 screen.addEventListener('click',event=>{const button=event.target.closest('[data-open-review]');if(button){reviewCaseId=button.dataset.openReview;navigate('review');}});
 const videoAnalysisLabel = () => reference()?.analysis?.lowQuality ? '（精度低の参考分析）' : '';
@@ -392,6 +393,7 @@ window.addEventListener('pagehide', () => { controller?.abort(); cleanup(); });
 try {
   const [savedVideos, savedResults, savedReference, savedSessions, savedReview] = await Promise.all([listVideos(), listResults(), getSetting('referenceId'), getSetting('sessions'), getSetting('review-v04')]);
   reviewData=savedReview?.value??emptyReviewData();
+  await expireTemporaryVideos();
   videos = savedVideos.sort((a,b) => b.createdAt - a.createdAt); coachSessions=savedResults.filter(r=>r.kind==='live-coach').sort((a,b)=>b.createdAt-a.createdAt); results = savedResults.filter(r=>r.kind!=='live-coach').sort((a,b) => b.createdAt - a.createdAt); referenceId = savedReference?.value ?? null; sessions=savedSessions?.value ?? []; render();
 } catch (error) {
   screen.innerHTML = '<div class="panel empty"><h2>ブラウザの保存機能を利用できません</h2><p>別のタブを閉じ、通常のブラウザウィンドウで開き直してください。</p></div>';

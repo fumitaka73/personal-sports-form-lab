@@ -30,7 +30,7 @@ export function mountLivePose(container,options={}){
  }
  async function stop(show=true){
   const wasRunning=running;++token;running=false;if(wasRunning)options.onStop?.();cancelAnimationFrame(raf);if(videoCallback!==null&&video.cancelVideoFrameCallback)video.cancelVideoFrameCallback(videoCallback);videoCallback=null;
-  stream?.getTracks().forEach(track=>track.stop());stream=null;video.pause();video.srcObject=null;landmarks=null;metrics=liveMetrics(null);drawPose(overlay,video,null);updateButtons();if(show&&!disposed)text('live-status','カメラを停止しました。映像は保存していません。');if(!disposed)paint(performance.now());
+  stream?.getTracks().forEach(track=>track.stop());stream=null;video.pause();video.srcObject=null;landmarks=null;metrics=liveMetrics(null);drawPose(overlay,video,null);updateButtons();if(show&&!disposed)text('live-status','カメラを停止しました。');if(!disposed)paint(performance.now());
   const old=engine,pending=sendPromise;engine=null;
   if(old){await pending?.catch(()=>{});await old.close().catch(()=>{});}
  }
@@ -82,5 +82,5 @@ export function mountLivePose(container,options={}){
  el('live-debug').onchange=event=>{el('live-detector').hidden=!event.target.checked;if(!options.shouldDetect?.())resetDetector();};el('live-hand').onchange=()=>resetDetector();
  const hidden=()=>{if(document.hidden)void stop();};const leaving=()=>void stop(false);document.addEventListener('visibilitychange',hidden);window.addEventListener('pagehide',leaving);
  const dispose=()=>{disposed=true;document.removeEventListener('visibilitychange',hidden);window.removeEventListener('pagehide',leaving);void stop(false);};
- dispose.isRunning=()=>running;dispose.resetDetector=resetDetector;dispose.setHand=hand=>{el('live-hand').value=hand;el('live-hand').disabled=!!options.shouldDetect?.();resetDetector();};return dispose;
+ dispose.getStream=()=>stream;dispose.isRunning=()=>running;dispose.resetDetector=resetDetector;dispose.setHand=hand=>{el('live-hand').value=hand;el('live-hand').disabled=!!options.shouldDetect?.();resetDetector();};return dispose;
 }
