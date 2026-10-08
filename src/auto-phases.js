@@ -39,9 +39,9 @@ function boundaries(rows,release,range){
   if(!(start<release&&release<end))return null;
   return {start,release,end};
 }
-export function motionSignals(a,b){
+export function motionSignals(a,b,maxGap=.25){
   const dt=a&&b?b.time-a.time:0;
-  if(dt<=0||dt>.25)return {wristVelocity:null,elbowVelocity:null,elbowChange:null,strength:null,qualifies:false};
+  if(dt<=0||dt>maxGap)return {wristVelocity:null,elbowVelocity:null,elbowChange:null,strength:null,qualifies:false};
   const elbowChange=Number.isFinite(a.elbow)&&Number.isFinite(b.elbow)?b.elbow-a.elbow:0;
   const wristVelocity=(b.wristHeight-a.wristHeight)/dt,elbowVelocity=elbowChange/dt;
   return {wristVelocity,elbowVelocity,elbowChange,strength:Math.max(0,elbowVelocity)/180+Math.max(0,wristVelocity)*.3,qualifies:b.wristHeight>=-.4&&(wristVelocity>=.2||elbowChange>=3)};
@@ -69,7 +69,7 @@ export function shotCandidates(frames,hand,aspect,range,includePose=false){
     return candidates.map(selected=>({...selected,candidateCount:candidates.length,ballTrackedFrames:frames.filter(f=>f.ball).length}));
   }
   for(let i=1;i<rows.length;i++){
-    const a=rows[i-1],b=rows[i],signal=motionSignals(a,b);
+    const a=rows[i-1],b=rows[i],signal=motionSignals(a,b,includePose?.6:.25);
     if(!signal.qualifies)continue;
     const strength=signal.strength;
     const release=Math.min(range.end-0.01,b.time+0.08),phases=boundaries(rows,release,range);

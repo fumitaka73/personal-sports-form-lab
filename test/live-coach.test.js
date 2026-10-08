@@ -36,7 +36,7 @@ test('summary uses chronological thirds, excludes weak corrections, and leaves u
 });
 test('voice Japanese/English, volume/off and latest feedback cancels stale speech',()=>{
  const spoken=[],synthesis={cancel(){spoken.length=0;},speak(u){spoken.push(u);},getVoices(){return [];}},Utterance=class{constructor(text){this.text=text;}};
- const voice=new CoachVoice({synthesis,Utterance});voice.deliver(selectCoachFeedback(comparison()));assert.equal(spoken[0].text,'リリースを少し高く');assert.equal(spoken[0].lang,'ja-JP');voice.configure({language:'en',volume:.4});voice.deliver(selectCoachFeedback(comparison(100)));assert.equal(spoken.length,1);assert.equal(spoken[0].text,'Perfect');assert.equal(spoken[0].volume,.4);voice.deliver({...selectCoachFeedback(comparison()),speak:false});assert.equal(spoken.length,0);voice.configure({enabled:false});assert.equal(voice.prime(),false);assert.equal(spoken.length,0);
+ const voice=new CoachVoice({synthesis,Utterance});voice.deliver(selectCoachFeedback(comparison()));assert.equal(spoken[0].text,'リリースを少し高く');assert.equal(spoken[0].lang,'ja-JP');assert.equal(spoken[0].rate,1.25);voice.configure({language:'en',volume:.4});voice.deliver(selectCoachFeedback(comparison(100)));assert.equal(spoken.length,1);assert.equal(spoken[0].text,'Perfect');assert.equal(spoken[0].volume,.4);voice.deliver({...selectCoachFeedback(comparison()),speak:false});assert.equal(spoken.length,0);voice.configure({enabled:false});assert.equal(voice.prime(),false);assert.equal(spoken.length,0);
 });
 
 test('fast complete cycles are analyzed independently and preserve shot order',()=>{

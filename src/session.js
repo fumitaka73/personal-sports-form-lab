@@ -1,5 +1,5 @@
 import { shotCandidates, shotMotionRows } from './auto-phases.js';
-export const SESSION_POSE_THRESHOLDS=Object.freeze({prepHeight:.4,prepElbow:150,peakHeight:.2,minRise:.4,minExtendedElbow:115,minExtension:12,minStrength:.3});
+export const SESSION_POSE_THRESHOLDS=Object.freeze({prepHeight:.7,prepElbow:165,peakHeight:.15,minRise:.28,minExtendedElbow:100,minExtension:8,minStrength:.12});
 export function detectSessionShots(frames, hand, aspect, range) {
   const candidates = shotCandidates(frames, hand, aspect, range, true);
   const rows = shotMotionRows(frames, hand, aspect);
@@ -9,7 +9,7 @@ export function detectSessionShots(frames, hand, aspect, range) {
     const release=candidate.phases.release;
     const motion=rows.filter(r=>r.time>=release-1.5&&r.time<=release+0.8);
     if(candidate.source==='ball')return {readyTime:release-.3,peakTime:release};
-    if(motion.length<5)return null;
+    if(motion.length<4)return null;
     let best=null;
     for(let i=0;i<motion.length;i++){
       const ready=motion[i];
@@ -17,13 +17,17 @@ export function detectSessionShots(frames, hand, aspect, range) {
       const rise=motion.slice(i).filter(r=>r.time<=release+0.8);
       const high=rise.filter(r=>r.time>=ready.time+0.15&&r.wristHeight>=SESSION_POSE_THRESHOLDS.peakHeight&&r.wristHeight-ready.wristHeight>=SESSION_POSE_THRESHOLDS.minRise);
       // At least two successive high frames: a single tracking jump is insufficient.
-      const peak=high.find((r,j)=>j&&r.time-high[j-1].time<=0.2);
+      const peak=high.find((r,j)=>j&&r.time-high[j-1].time<=0.6);
       if(!peak)continue;
       const ascent=rise.filter(r=>r.time<=peak.time);
-      if(ascent.some((r,j)=>j&&r.time-ascent[j-1].time>0.5))continue;
+      if(ascent.some((r,j)=>j&&r.time-ascent[j-1].time>0.65))continue;
       const bent=Number.isFinite(ready.elbow)&&ready.elbow<=SESSION_POSE_THRESHOLDS.prepElbow;
       const extended=Number.isFinite(peak.elbow)&&peak.elbow>=SESSION_POSE_THRESHOLDS.minExtendedElbow&&peak.elbow-ready.elbow>=SESSION_POSE_THRESHOLDS.minExtension;
-      if(candidate.source==='pose'&&!(bent&&extended))continue;
+      if(candidate.source==='pose'&&!(bent&&extended)){
+        // Occluded elbows need stronger, sustained wrist evidence instead.
+        const missingElbow=!Number.isFinite(ready.elbow)||!Number.isFinite(peak.elbow);
+        if(!missingElbow||peak.wristHeight-ready.wristHeight<.5||high.length<3)continue;
+      }
       best={readyTime:ready.time,peakTime:peak.time};break;
     }
     return best;
@@ -41,7 +45,7 @@ export function detectSessionShots(frames, hand, aspect, range) {
   const cycles=[];
   for(const candidate of selected){
     const previous=cycles.at(-1);
-    const reset=!previous||candidate.source==='ball'||rows.some((r,j)=>r.time>previous.cycle.peakTime&&r.time<candidate.phases.release&&j+1<rows.length&&rows[j+1].time<candidate.phases.release&&rows[j+1].time-r.time<=0.2&&((r.wristHeight<=0.4&&rows[j+1].wristHeight<=0.4)||(r.elbow<140&&rows[j+1].elbow<140)));
+    const reset=!previous||candidate.source==='ball'||rows.some((r,j)=>r.time>previous.cycle.peakTime&&r.time<candidate.phases.release&&j+1<rows.length&&rows[j+1].time<candidate.phases.release&&rows[j+1].time-r.time<=0.6&&((r.wristHeight<=SESSION_POSE_THRESHOLDS.prepHeight&&rows[j+1].wristHeight<=SESSION_POSE_THRESHOLDS.prepHeight)||(r.elbow<150&&rows[j+1].elbow<150)));
     if(reset)cycles.push(candidate);
   }
   return cycles.map((c,i)=> {

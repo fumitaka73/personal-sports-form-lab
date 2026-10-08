@@ -25,7 +25,7 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
   };
  });
 
- await page.addInitScript(()=>{window.__spoken=[];Object.defineProperty(window,'speechSynthesis',{value:{cancel(){},getVoices(){return []},speak(u){window.__spoken.push({text:u.text,lang:u.lang,volume:u.volume});}}});});
+ await page.addInitScript(()=>{window.__spoken=[];Object.defineProperty(window,'speechSynthesis',{value:{cancel(){},getVoices(){return []},speak(u){window.__spoken.push({text:u.text,lang:u.lang,volume:u.volume,rate:u.rate});}}});});
  await page.goto(process.env.LIVE_TEST_URL||'http://127.0.0.1:5173/');
  await page.evaluate(async()=>{const {calculateMetrics}=await import('/src/metrics.js');const {frames}=await import('/test-support/shot-frames.js');const analysis=calculateMetrics(frames(),{start:0,release:1,end:2},'right',320/480,false);const {saveVideo,setSetting}=await import('/src/storage.js');await saveVideo({id:'coach-good',title:'Coach baseline',createdAt:Date.now(),shotType:'jump',cameraAngle:'side',hand:'right',analysis,blob:new Blob(),notes:''});await setSetting('referenceId','coach-good');});
  await page.reload();await page.getByRole('button',{name:'Live Coach',exact:true}).click();assert.equal(await page.locator('#coach-start').isEnabled(),false);await page.locator('#live-start').click();await page.waitForFunction(()=>!document.querySelector('#coach-start').disabled);
@@ -37,5 +37,8 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
  await page.locator('#coach-language').selectOption('en');await page.locator('#coach-voice').check();await page.locator('#coach-voice-test').click();assert.equal(await page.evaluate(()=>window.__spoken.at(-1).lang),'en-US');
  await page.getByRole('button',{name:'履歴',exact:true}).click();await page.waitForFunction(()=>window.__tracks.every(t=>t.readyState==='ended'));await page.getByRole('button',{name:'まとめを見る',exact:true}).click();assert.ok((await page.locator('#screen').textContent()).includes('Most consistent metric'));
  await page.reload();await page.getByRole('button',{name:'履歴',exact:true}).click();assert.ok((await page.locator('#screen').textContent()).includes('3本'));
+ await page.getByRole('button',{name:'Live Coach',exact:true}).click();await page.evaluate(()=>window.__mode='none');await page.locator('#live-start').click();await page.waitForFunction(()=>!document.querySelector('#coach-start').disabled);await page.locator('#coach-start').click();
+ await page.waitForFunction(()=>document.querySelector('#coach-status').textContent.includes('体を検出できません'),null,{timeout:16000});assert.ok(await page.evaluate(()=>window.__spoken.some(s=>s.text.includes('遮蔽物'))));assert.ok(await page.evaluate(()=>window.__spoken.every(s=>s.rate===1.25)));
+ await page.locator('#coach-stop').click();const afterStop=await page.evaluate(()=>window.__spoken.length);await page.waitForTimeout(1200);assert.equal(await page.evaluate(()=>window.__spoken.length),afterStop);await page.locator('#live-stop').click();
  assert.deepEqual(errors,[]);console.log('PASS: Live Coach completed shots, shared scores, 0.5–2s feedback delivery, Japanese/English voice, voice off, diagnostics, summaries, local persistence without camera video/frames, history reload and camera cleanup. Synthetic camera; physical iPhone not tested.');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

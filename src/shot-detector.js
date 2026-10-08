@@ -11,7 +11,7 @@ export class ShotDetector{
   if(!this.live)return this.snapshot();
   this.frames=this.frames.filter(f=>f.time>=time-10);
   const row=shotMotionRows([frame],this.hand,this.aspect)[0]??null;
-  const motion=motionSignals(this.previous,row),wristVelocity=motion.wristVelocity,elbowVelocity=motion.elbowVelocity;
+  const motion=motionSignals(this.previous,row,.6),wristVelocity=motion.wristVelocity,elbowVelocity=motion.elbowVelocity;
   this.signals={wristHeight:row?.wristHeight??null,wristVelocity,elbowAngle:row?.elbow??null,elbowVelocity,kneeAngle:liveMetrics(landmarks,this.aspect)[this.hand==='right'?'rightKnee':'leftKnee'],shoulderToWrist:row?(row.wristHeight>=0?'above':'below'):null};
   this.history.push({time,...this.signals});this.history=this.history.filter(r=>r.time>=time-10);
   if(!row){this.previous=null;this.preparation=null;this.state='IDLE';return this.snapshot();}
