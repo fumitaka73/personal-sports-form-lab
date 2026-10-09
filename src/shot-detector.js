@@ -1,13 +1,17 @@
+import {PoseContinuity} from './pose-presence.js';
 import {detectSessionShots,SESSION_POSE_THRESHOLDS} from './session.js';
 import {shotMotionRows,motionSignals} from './auto-phases.js';
 import {liveMetrics} from './live-metrics.js';
 // Incremental adapter around the existing Session detector, not a new classifier.
 // Timestamp is milliseconds, matching camera/performance timestamps.
 export class ShotDetector{
- constructor({hand='right',aspect=1,live=false,range=null,parameters=SESSION_POSE_THRESHOLDS}={}){this.parameters={...SESSION_POSE_THRESHOLDS,...parameters};this.hand=hand;this.aspect=aspect;this.live=live;this.range=range;this.frames=[];this.history=[];this.count=0;this.lastRelease=-Infinity;this.lastEvaluation=-Infinity;this.previous=null;this.preparation=null;this.lastEvent=null;this.state='IDLE';this.signals={};}
+ constructor({hand='right',aspect=1,live=false,range=null,parameters=SESSION_POSE_THRESHOLDS}={}){this.parameters={...SESSION_POSE_THRESHOLDS,...parameters};this.hand=hand;this.aspect=aspect;this.live=live;this.range=range;this.frames=[];this.history=[];this.count=0;this.lastRelease=-Infinity;this.lastEvaluation=-Infinity;this.previous=null;this.preparation=null;this.lastEvent=null;this.state='IDLE';this.signals={};this.presence=new PoseContinuity();this.lastInput=-Infinity;}
+ resetContinuity(reason='姿勢の連続性を確認中'){this.frames=[];this.previous=null;this.preparation=null;this.state='IDLE';this.signals={};this.presence.reset();this.presence.reason=reason;}
  processFrame(timestamp,landmarks,ball=null,frameTime=null){
-  this.completed=[];const time=frameTime??timestamp/1000;if(!Number.isFinite(time)||this.frames.at(-1)?.time>=time)return this.snapshot();
-  const frame={time,landmarks,ball};this.frames.push(frame);
+  this.completed=[];const time=frameTime??timestamp/1000;if(!Number.isFinite(time)||this.lastInput>=time)return this.snapshot();
+  this.lastInput=time;const frame={time,landmarks,ball};
+  if(this.live){const status=this.presence.update(time,landmarks,this.hand,this.aspect);if(status.broken){this.lastEvaluation=-Infinity;this.frames=[];this.previous=null;this.preparation=null;this.state='IDLE';}if(!status.ready){if(this.presence.previous)this.frames.push(frame);this.signals={};return this.snapshot();}}
+  this.frames.push(frame);
   if(!this.live)return this.snapshot();
   this.frames=this.frames.filter(f=>f.time>=time-10);
   const row=shotMotionRows([frame],this.hand,this.aspect)[0]??null;
@@ -20,7 +24,7 @@ export class ShotDetector{
   if(motion.qualifies)this.state='RISING';
   const ready=this.preparation;
   if(ready&&row.wristHeight>=this.parameters.peakHeight&&row.wristHeight-ready.wristHeight>=this.parameters.minRise&&row.elbow>=this.parameters.minExtendedElbow&&row.elbow-ready.elbow>=this.parameters.minExtension)this.state='RELEASE_CANDIDATE';
-  if(time-this.lastEvaluation>=.25){
+  if(time-this.lastEvaluation>=.25-1e-5){
    this.lastEvaluation=time;
    const candidates=this.detect({start:this.frames[0].time,end:time});
    for(const candidate of candidates){
@@ -37,7 +41,7 @@ export class ShotDetector{
   this.previous=row;return this.snapshot();
  }
  detect(range=this.range){if(!this.frames.length)return [];return detectSessionShots(this.frames,this.hand,this.aspect,range??{start:this.frames[0].time,end:this.frames.at(-1).time},this.parameters);}
- snapshot(){return {state:this.state,count:this.count,signals:this.signals,event:this.lastEvent,events:this.completed??[]};}
+ snapshot(){return {presence:{ready:this.presence.ready,reason:this.presence.reason},state:this.state,count:this.count,signals:this.signals,event:this.lastEvent,events:this.completed??[]};}
 }
 export function detectSessionWithAdapter(frames,hand,aspect,range){
  const detector=new ShotDetector({hand,aspect,range});

@@ -1,3 +1,4 @@
+import {iterateChunks,POSE_STRIDE} from './pose-archive.js';
 import {ratingEntry} from './session-feedback.js';
 const database = new Promise((resolve, reject) => {
   const request = indexedDB.open('sports-form-lab', 4);
@@ -83,5 +84,19 @@ export async function saveSessionRating(session,ratings,note,condition,basis){
   const tx=db.transaction('settings','readwrite'),store=tx.objectStore('settings'),request=store.get('review-v04');let saved,error;
   request.onsuccess=()=>{try{const data=structuredClone(request.result?.value??{version:1,cases:{},references:{},sessionFeedback:{},verification:{}}),key=`live:${session.id}`;data.sessionFeedback[key]=ratingEntry(session,data.sessionFeedback[key],ratings,note,condition,basis);saved=data;store.put({id:'review-v04',value:data});}catch(e){error=e;tx.abort();}};
   tx.oncomplete=()=>resolve(saved);tx.onerror=()=>reject(error??tx.error);tx.onabort=()=>reject(error??tx.error);
+ });
+}
+// Save a generated shot clip without changing source segments or other shots.
+export async function saveShotClip(row,limit=128*1024*1024){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('temporaryVideos','readwrite'),store=tx.objectStore('temporaryVideos'),request=store.getAll();let error;
+ request.onsuccess=()=>{const existing=request.result.find(r=>r.id===row.id),total=request.result.filter(r=>r.id!==row.id).reduce((n,r)=>n+r.bytes,0);if(total+row.bytes>limit){error=new Error('クリップ保存の容量上限です。元動画は保持しました。不要な動画を保存・整理してください。');tx.abort();return;}store.put({...row,keep:existing?.keep??row.keep});};
+ tx.oncomplete=resolve;tx.onerror=()=>reject(error??tx.error);tx.onabort=()=>reject(error??tx.error);
+ });
+}
+// Stream only the requested pose window; do not expand a whole session on iPhone.
+export async function loadPoseWindow(id,start,end,maxFrames=600){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction(['poseSessions','poseChunks'],'readonly'),request=tx.objectStore('poseSessions').get(id),frames=[];
+ request.onsuccess=()=>{const session=request.result;if(!session)return;const cursor=tx.objectStore('poseChunks').openCursor(IDBKeyRange.bound(id+':',id+':\uffff'));cursor.onsuccess=()=>{const row=cursor.result;if(!row)return;const packed=new Float32Array(row.value.buffer);if(session.origin+packed[packed.length-POSE_STRIDE]<start){row.continue();return;}if(session.origin+packed[0]>end)return;for(const frame of iterateChunks([row.value],session.origin)){if(frame.time>end||frames.length>=maxFrames)return;if(frame.time>=start)frames.push(frame);}row.continue();};};
+ tx.oncomplete=()=>resolve(frames);tx.onerror=()=>reject(tx.error);
  });
 }

@@ -1,6 +1,6 @@
 import {GROUPS} from './scoring-config.js';
 export const COACH_RULES=Object.freeze({version:'live-coach-0.4.1',perfect:93,good:82,meaningfulDeviation:.2,smallDeviation:.35,repeatShots:2,cooldownMs:3000});
-export const FOCUS_LABELS={automatic:'おまかせ',rhythm:'腕・リリースのタイミング',lower:'脚と腕を伸ばすタイミング',dip:'膝の曲げ（ディップ）',release:'リリースの高さ・動き',elbow:'肘の伸ばし方',follow:'打った後の腕のキープ'};
+export const FOCUS_LABELS={automatic:'おまかせ',rhythm:'腕・リリースのタイミング',lower:'脚と腕を伸ばすタイミング',dip:'膝の曲げ（ディップ）',release:'リリースの高さ・動き',elbow:'肘の伸ばし方',follow:'リリース後の腕'};
 const phrases={perfect:['とてもいいです','Perfect'],good:['いいです','Good'],view:['全身を映して','Show your whole body'],rhythm:['腕を伸ばすタイミングを確認','Check arm timing'],legs:['ディップ浅い','Dip shallow'],deep:['ディップ深い','Dip deep'],lower:['脚と腕を一緒に伸ばして','Extend legs and arms together'],higher:['リリース低い','Release low'],lowerRelease:['リリース高い','Release high'],follow:['打った後の腕をキープ','Hold your arm after release'],elbow:['肘を伸ばして','Extend your elbow'],elbowRelax:['肘を少しゆるめて','Relax your elbow a little'],arm:['腕の上げ幅が小さい','Arm lift small'],armWide:['腕の上げ幅が大きい','Arm lift large'],balance:['体の軸を安定させて','Keep your body steady'],legsLate:['脚の伸ばし始めが遅い','Leg extension starts late'],legsEarly:['脚の伸ばし始めが早い','Leg extension starts early'],armEarly:['腕の伸ばし始めが早い','Arm extension starts early'],armLate:['腕の伸ばし始めが遅い','Arm extension starts late'],peakLate:['腕の上げ終わりが遅い','Arm lift ends late'],peakEarly:['腕の上げ終わりが早い','Arm lift ends early'],riseHigh:['伸び上がり大きい','Body rise large'],riseLow:['伸び上がり小さい','Body rise small']};
 function codeFor(m){
  if(m.key==='kneeArmTiming')return m.delta>0?'legsLate':'legsEarly';
@@ -55,7 +55,7 @@ export function selectLegacyCoachFeedback(comparison,{focus='automatic',recent=[
 // One utterance; additive wrapper leaves historical rule replay available.
 export function selectCoachFeedback(comparison,options={}){
  const {trunkEstimate,parameters={},recent=[],now=Date.now(),shotNumber=recent.length+1,focus='automatic'}=options;
- const original=selectLegacyCoachFeedback(comparison,options),phrasesShort={legs:['ディップ浅い','Dip shallow'],deep:['ディップ深い','Dip deep'],higher:['リリース低い','Release low'],lowerRelease:['リリース高い','Release high'],elbow:['肘の位置','Elbow position'],elbowRelax:['肘の位置','Elbow position'],arm:['肘の位置','Elbow position'],armWide:['肘の位置','Elbow position'],balance:['バランス','Balance'],lower:['脚と腕のタイミング','Leg and arm timing'],rhythm:['腕のタイミング','Arm timing'],follow:['腕キープ','Hold arm'],legsLate:['脚が遅い','Legs late'],legsEarly:['脚が早い','Legs early'],armEarly:['腕が早い','Arm early'],armLate:['腕が遅い','Arm late'],peakLate:['腕が遅い','Arm late'],peakEarly:['腕が早い','Arm early'],riseHigh:['伸び上がり大きい','Rise large'],riseLow:['伸び上がり小さい','Rise small']};
+ const original=selectLegacyCoachFeedback(comparison,options),phrasesShort={legs:['ディップ浅い','Dip shallow'],deep:['ディップ深い','Dip deep'],higher:['リリース低い','Release low'],lowerRelease:['リリース高い','Release high'],elbow:['肘の位置','Elbow position'],elbowRelax:['肘の位置','Elbow position'],arm:['肘の位置','Elbow position'],armWide:['肘の位置','Elbow position'],balance:['バランス','Balance'],lower:['脚と腕のタイミング','Leg and arm timing'],rhythm:['腕のタイミング','Arm timing'],follow:['リリース後も腕を伸ばして','Hold arm after release'],legsLate:['脚の伸ばし遅い','Legs late'],legsEarly:['脚の伸ばし早い','Legs early'],armEarly:['腕の伸ばし早い','Arm early'],armLate:['腕の伸ばし遅い','Arm late'],peakLate:['腕の上げ終わり遅い','Arm late'],peakEarly:['腕の上げ終わり早い','Arm early'],riseHigh:['伸び上がり大きい','Rise large'],riseLow:['伸び上がり小さい','Rise small']};
  const rules={...COACH_RULES,...parameters};let choices=[];
  // Preserve the selected Good/Perfect gates; never inflate the numerical score.
  if(original.trigger||coachDeviations(comparison,parameters).some(m=>inCoachFocus(m,focus)&&m.normalizedDeviation>rules.smallDeviation))choices=coachDeviations(comparison,parameters).filter(m=>inCoachFocus(m,focus)).map(m=>({key:m.key,delta:m.delta,code:m.code,priority:m.priority,confidence:options.metricReliability?.[m.key]??comparison.confidence,...Object.fromEntries(['label','tolerance','unit','normalizedDeviation'].map(k=>[k,m[k]]))}));
@@ -67,7 +67,7 @@ export function selectCoachFeedback(comparison,options={}){
  // Approved longer repetition settings win. A short safety cooldown applies to all new corrections.
  const unsuppressed=valid.filter(m=>{const last=lastFor(m);if(!last)return true;const cooldown=Math.max(3000,rules.cooldownMs),shots=m.key==='trunkExtension'?Math.max(2,rules.repeatShots):rules.suppressCorrections?rules.repeatShots:1;return now-last.timestamp>=cooldown&&shotNumber-last.number>=shots;});
  let output={...original,version:'live-coach-0.6',triggers:[],combined:false};
- if(valid.length){const selected=unsuppressed;const voiced=selected.length?selected:valid;output={...output,code:voiced[0].code,trigger:voiced[0],triggers:voiced,combined:voiced.length===2,text:{ja:voiced.map(m=>m.code==='back'?'腰反りすぎ':phrasesShort[m.code]?.[0]??'フォーム確認').join('、'),en:voiced.map(m=>m.code==='back'?'Back extension':phrasesShort[m.code]?.[1]??'Check form').join(', ')},speak:selected.length>0,reason:voiced.map(m=>m.key==='trunkExtension'?trunkEstimate.reason:`${m.label}: Good Formとの差 ${m.delta?.toFixed(3)}、許容差比 ${m.normalizedDeviation?.toFixed(2)}`).join(' / '),suppressedReason:selected.length<valid.length?'同じ指摘の短い間隔での繰り返しを抑えました。':null};}
+ if(valid.length){const selected=unsuppressed;const voiced=selected.length?selected:valid;output={...output,code:voiced[0].code,trigger:voiced[0],triggers:voiced,combined:voiced.length===2,text:{ja:voiced.map(m=>m.code==='back'?'腰反りすぎ':phrasesShort[m.code]?.[0]??'フォーム確認').join('、'),en:voiced.map(m=>m.code==='back'?'Back extension':phrasesShort[m.code]?.[1]??'Check form').join(', ')},speak:selected.length>0,reason:voiced.map(m=>m.key==='trunkExtension'?trunkEstimate.reason:`${explainCoachMetric(m)} ${m.label}: Good Formとの差 ${m.delta?.toFixed(3)}、許容差比 ${m.normalizedDeviation?.toFixed(2)}`).join(' / '),suppressedReason:selected.length<valid.length?'同じ指摘の短い間隔での繰り返しを抑えました。':null};}
  else if(original.trigger){output.speak=false;output.reason+=' 項目別の追跡根拠が弱いため、画面の参考表示だけにします。';output.text={ja:phrasesShort[original.code]?.[0]??'フォーム確認',en:phrasesShort[original.code]?.[1]??'Check form'};}
  else if(['good','perfect'].includes(original.code)){
   const evidence=comparison.overall>=(Number.isFinite(options.thresholds?.good)?options.thresholds.good:COACH_RULES.good)&&comparison.metrics.some(m=>!m.excluded&&Number.isFinite(m.delta)&&inCoachFocus(m,focus)&&['High','Medium'].includes(options.metricReliability?.[m.key]??comparison.confidence));
@@ -75,4 +75,12 @@ export function selectCoachFeedback(comparison,options={}){
   else output.text={ja:original.code==='perfect'?'パーフェクト！':'グッド！',en:original.code==='perfect'?'Perfect!':'Good!'};
  }
  return output;
+}
+
+export function explainCoachMetric(m){
+ if(m.key==='kneeArmTiming')return m.delta>0?'Good Formより、腕に対して脚を伸ばし始める時刻が遅い傾向です。脚の伸ばし始めを早めて確認してください。':'Good Formより、腕に対して脚を伸ばし始める時刻が早い傾向です。脚と腕の開始の順番を確認してください。';
+ if(m.key==='armLead')return m.delta>0?'リリースまでの区間内で、Good Formより腕を伸ばし始める時刻が早い傾向です。':'リリースまでの区間内で、Good Formより腕を伸ばし始める時刻が遅い傾向です。';
+ if(m.key==='wristPeakTiming')return m.delta>0?'リリースに対して腕を上げ終わる時刻がGood Formより遅い傾向です。':'リリースに対して腕を上げ終わる時刻がGood Formより早い傾向です。';
+ if(['followWrist','followElbow'].includes(m.key))return 'リリース後の手首・肘の動きが基準より大きい傾向です。シュートした腕を伸ばしたまま保ちましょう。';
+ return '同じ撮影条件のGood Formと比較した参考の助言です。';
 }

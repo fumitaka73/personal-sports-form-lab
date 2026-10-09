@@ -1,12 +1,14 @@
 # Personal Sports Form Lab
 
+v0.17の改善・利用手順・実機確認: [Issue #5 — Live Coach・ボール/Hoop表示・録画・レビュー](docs/issue-5-live-coach-ux.md)。
+
 新機能の利用手順・計算定義: [Session Report / My Progress / 全体フィードバック](docs/issue-3-session-report-progress.md)。
 
 最新のiPhone向け操作・互換性・検証手順: [Issue #1対応](docs/issue-1-iphone-ux.md)。基本画面はGood Form / Live Coach / Shot Review / AIの改善の4つです。
 
 自分のバスケットボールのシュートを、コーチが評価した自分の **Good Form** と比較する個人用Webアプリです。動画・姿勢データ・分析履歴はブラウザのIndexedDBに保存します。動画の外部送信、有料API、ログインはありません。
 
-最新は **VERSION 0.11 / Shot Review v0.4** です。既存機能を維持し、ショット検証、複数基準の管理、コーチ原文の保存、評価レポートとJSON移行を追加しました。詳細は [v0.4ドキュメント](docs/v0.4-shot-review.md) を参照してください。
+現在のアプリ版は **v0.17** です。Shot Reviewの保存仕様はv0.4からの互換性を維持します。既存機能を維持し、ショット検証、複数基準の管理、コーチ原文の保存、評価レポートとJSON移行を追加しました。詳細は [v0.4ドキュメント](docs/v0.4-shot-review.md) を参照してください。
 
 ## Live Pose v0.25 (Beta) — 継続提供
 

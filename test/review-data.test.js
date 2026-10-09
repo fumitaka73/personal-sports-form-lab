@@ -21,3 +21,7 @@ test('weak session rating export/import preserves separate shot labels and rejec
  const {ratingEntry}=await import('../src/session-feedback.js'),f=fixture(),data=emptyReviewData(),cases=collectCases([],[],[f.live]);data.sessionFeedback['live:camera']=ratingEntry(f.live,null,{dip:'inaccurate',release:'unknown',trunk:'accurate'},'session note','condition',null,1);const exported=exportReviewData(data,cases),loaded=validateReviewImport(JSON.parse(JSON.stringify(exported)));assert.equal(loaded.sessionFeedback['live:camera'].batchRating.ratings.dip,'inaccurate');assert.equal(loaded.cases['live:camera:1'].labels.detection,'unreviewed');
  const bad=structuredClone(exported);bad.data.sessionFeedback['live:camera'].batchRating.sessionId='other';assert.throws(()=>validateReviewImport(bad));
 });
+test('optional points metadata round trips without changing legacy cases, and invalid point labels are rejected',()=>{
+ const f=fixture();for(const points of [undefined,'unspecified','2pt','3pt']){const live={...f.live,metadata:{...f.live.metadata,...(points===undefined?{}:{points})}},cases=collectCases([],[],[live]),json=exportReviewData(emptyReviewData(),cases),read=validateReviewImport(JSON.parse(JSON.stringify(json)));assert.equal(read.cases['live:camera:1'].metadata.points,points);}
+ const json=exportReviewData(emptyReviewData(),collectCases([],[],[f.live]));json.data.cases['live:camera:1'].metadata.points='guessed';assert.throws(()=>validateReviewImport(json));
+});
