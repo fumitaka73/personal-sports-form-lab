@@ -22,7 +22,7 @@ test('recording stop flushes independent segment before resolving; quota stops f
 });
 test('failed local persistence stops recorder and reports failure',async()=>{
  const original=globalThis.MediaRecorder;globalThis.MediaRecorder=FakeRecorder;
- try{const notices=[],rec=new TemporaryRecorder({save:async()=>{throw new Error('quota');},onStatus:t=>notices.push(t)});rec.start({getVideoTracks:()=>[]},'session');await rec.stop();assert.equal(rec.stopped,true);assert.ok(notices.some(n=>n.includes('保存に失敗')));}finally{globalThis.MediaRecorder=original;}
+ try{const notices=[],rec=new TemporaryRecorder({save:async()=>{throw new Error('quota');},onStatus:t=>notices.push(t)});rec.start({getVideoTracks:()=>[]},'session');const result=await rec.stop();assert.equal(result.failed,true);assert.equal(rec.stopped,true);assert.ok(notices.some(n=>n.includes('保存に失敗')));}finally{globalThis.MediaRecorder=original;}
 });
 function originalCase(){const metadata={shotType:'jump',cameraAngle:'side',hand:'right'},analysis=calculateMetrics(frames(),{start:0,release:1,end:2},'right',1,false),review=reviewShot(analysis,analysis,metadata,metadata);return collectCases([],[],[{id:'live',createdAt:1,metadata,goodFormReference:{id:'good',title:'Good',...metadata,analysis},shots:[{number:1,timestamp:1,analysis,comparison:review.comparison,coachFeedback:null,videoRange:{start:0,end:4}}]}])[0];}
 test('annotations and undo snapshots do not change original predictions; JSON preserves manual misses and history',()=>{

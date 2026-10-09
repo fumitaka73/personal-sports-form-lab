@@ -1,16 +1,17 @@
+import {pointValue} from './shot-metadata.js';
 import {METRICS} from './scoring-config.js';
 import {summarizeCoach} from './coach-summary.js';
 export const REPORT_ITEMS={dip:{label:'ディップ（膝の曲げ）',keys:['kneeAngle']},release:{label:'リリース関連',keys:['armLead','wristPeakTiming','wristHeight']},elbow:{label:'肘・肩',keys:['elbowAngle','shoulderAngle']},balance:{label:'バランス',keys:['torsoLean','bodyOffset','verticalRise','hipAngle']},follow:{label:'フォロースルー',keys:['followWrist','followElbow']},timing:{label:'脚と腕のタイミング',keys:['kneeArmTiming']}};
 const valid=n=>Number.isFinite(n)&&n>=0&&n<=100;
 export const mean=values=>values.length?values.reduce((a,b)=>a+b,0)/values.length:null;
-export const conditionKey=s=>JSON.stringify([s.goodFormReference?.id,...['shotType','cameraAngle','hand'].map(k=>s.metadata?.[k])]);
+export const conditionKey=s=>{const keys=[s.goodFormReference?.id,...['shotType','cameraAngle','hand'].map(k=>s.metadata?.[k])],points=pointValue(s.metadata?.points);if(points!=='unspecified')keys.push(points);return JSON.stringify(keys);};
 // The saved reference snapshot distinguishes updates under the same Good Form ID.
 const stable=v=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v;
 export function basisKey(s){
  const versions=[...new Set((s.shots??[]).map(shot=>shot.scoreVersion??shot.comparison?.version??'unknown'))].sort();
  const ref=s.goodFormReference?.analysis;
  if(!ref||typeof ref.version!=='string'||versions.length!==1||versions[0]==='unknown')return null;
- return JSON.stringify([conditionKey(s),versions,stable({version:ref.version,metrics:ref.metrics,phases:ref.phases,hand:ref.hand,aspect:ref.aspect,trunkProfile:ref.trunkProfile,analyzedAt:ref.analyzedAt}),s.calibrationVersionId??null]);
+ const parts=[conditionKey(s),versions,stable({version:ref.version,metrics:ref.metrics,phases:ref.phases,hand:ref.hand,aspect:ref.aspect,trunkProfile:ref.trunkProfile,analyzedAt:ref.analyzedAt}),s.calibrationVersionId??null];if(s.captureVersion)parts.push(s.captureVersion);return JSON.stringify(parts);
 }
 export function sessionReport(session){
  const shots=session.shots??[],legacy=summarizeCoach(shots.map(s=>({...s,comparison:{...s.comparison,overall:s.comparison?.overall??null,metrics:s.comparison?.metrics??[],groups:s.comparison?.groups??[]}})));
@@ -36,7 +37,7 @@ export function sessionReport(session){
 export function previousReport(session,sessions){
  const previous=sessions.filter(s=>s.id!==session.id&&s.endedAt&&s.createdAt<session.createdAt&&conditionKey(s)===conditionKey(session)).sort((a,b)=>b.createdAt-a.createdAt)[0];
  if(!previous)return {previous:null,reason:'前回の同条件の終了済み記録がありません。'};
- if(!basisKey(session)||basisKey(session)!==basisKey(previous))return {previous,reason:'採点版・Good Formの保存内容・適用設定が異なる、または不明なため前回比は表示しません。'};
+ if(!basisKey(session)||basisKey(session)!==basisKey(previous))return {previous,reason:'採点版・Good Formの保存内容・適用設定・撮影方式が異なる、または不明なため前回比は表示しません。'};
  const current=sessionReport(session),before=sessionReport(previous),delta=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)?a-b:null;
  return {previous,before,delta:delta(current.average,before.average),items:Object.fromEntries(Object.keys(REPORT_ITEMS).map(k=>[k,delta(current.items[k].score,before.items[k].score)])),trunkDelta:delta(current.trunk.lean,before.trunk.lean),reason:current.count&&before.count?'':'比較できる評価本数がありません。'};
 }

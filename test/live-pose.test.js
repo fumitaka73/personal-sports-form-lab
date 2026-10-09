@@ -36,7 +36,7 @@ test('multiple live motions share the Session candidate count',()=>{
  assert.equal(d.count,3);
 });
 test('temporary pose loss clears live signals and later frames recover',()=>{
- const d=new ShotDetector({live:true});d.processFrame(0,frames()[0].landmarks);d.processFrame(100,null);assert.equal(d.state,'IDLE');assert.equal(d.signals.wristHeight,null);d.processFrame(200,frames()[0].landmarks);assert.ok(Number.isFinite(d.signals.wristHeight));assert.equal(d.count,0);
+ const d=new ShotDetector({live:true});d.processFrame(0,frames()[0].landmarks);d.processFrame(100,null);assert.equal(d.state,'IDLE');assert.equal(d.signals.wristHeight??null,null);d.processFrame(200,frames()[0].landmarks);assert.equal(d.presence.ready,false);for(const t of [300,400,500])d.processFrame(t,frames()[0].landmarks);assert.ok(Number.isFinite(d.signals.wristHeight));assert.equal(d.count,0);
 });
 test('out of order timestamps are ignored and rolling history is bounded',()=>{
  const d=new ShotDetector({live:true});for(let i=0;i<200;i++)d.processFrame(i*100,null);const count=d.frames.length;d.processFrame(1,null);assert.equal(d.frames.length,count);assert.ok(count<=101);assert.ok(d.history.length<=101);
