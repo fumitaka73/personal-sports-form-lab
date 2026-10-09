@@ -33,3 +33,7 @@ test('annotations and undo snapshots do not change original predictions; JSON pr
  const imported=validateReviewImport(JSON.parse(JSON.stringify(exportReviewData(data,[updated,missed]))));assert.deepEqual(imported.cases[updated.id].annotationHistory,updated.annotationHistory);assert.equal(imported.cases[missed.id].manualAdded,true);
  const invalid=exportReviewData(data,[updated]);invalid.data.cases[updated.id].videoRange={start:4,end:2};assert.throws(()=>validateReviewImport(invalid));
 });
+test('individual cue labels and their history round-trip without changing existing review or analysis fields',()=>{
+ const c=originalCase(),updated=annotateCase(c,{...c.labels,detection:'correct',voiceJudgment:'partial',cueLabels:{'kneeAngle:1':'correct','trunkExtension:1':'incorrect'}}),data=emptyReviewData(),json=exportReviewData(data,[updated]),read=validateReviewImport(JSON.parse(JSON.stringify(json))).cases[updated.id];assert.deepEqual(read.labels.cueLabels,updated.labels.cueLabels);assert.equal(read.labels.evaluation,c.labels.evaluation);assert.deepEqual(read.analysis,c.analysis);assert.deepEqual(read.annotationHistory,updated.annotationHistory);
+ const invalid=structuredClone(json);invalid.data.cases[updated.id].labels.cueLabels['trunkExtension:1']='definitely';assert.throws(()=>validateReviewImport(invalid));
+});

@@ -1,3 +1,4 @@
+import {voiceReviewed} from './quick-review.js';
 import {iterateChunks} from './pose-archive.js';
 import {SESSION_POSE_THRESHOLDS} from './session.js';
 import {ShotDetector} from './shot-detector.js';
@@ -20,6 +21,7 @@ export function validateParameters(value){
 export function reviewFingerprint(cases){return JSON.stringify(cases.map(c=>[c.id,c.labels.detection,!!c.manualAdded,c.analysis.phases?.release,c.videoRange,c.labels.conditions]).sort((a,b)=>a[0].localeCompare(b[0])));}
 export function usableDetectionSession(s,cases){
  const group=cases.filter(c=>c.source.mode==='live'&&c.source.recordId===s.id);
+ if(s.poseIntegrityError)return s.poseIntegrityError;
  if(!s.complete||s.orientationChanged||!(s.frames?.length||s.count&&s.chunks?.length))return '完全な姿勢時系列がありません（旧記録・中断・回転など）';
  if((s.frames?.length??s.count)>30000)return '再検証の処理上限（30,000フレーム）を超えています';
  if(!s.truth?.confirmed||s.truth.reviewFingerprint!==reviewFingerprint(group))return '全区間のシュート時刻を確認してください（ラベル変更後は再確認）';
@@ -62,6 +64,8 @@ const metricLabel={kneeAngle:'dip',kneeArmTiming:'timing',wristHeight:'release',
 function semantic(f){if(f.triggers?.length)return f.triggers.map(t=>`${t.key}:${Math.sign(t.delta)}`).sort().join('|');return f.trigger?`${f.trigger.key}:${Math.sign(f.trigger.delta)}`:['good','perfect'].includes(f.code)?'praise':f.code;}
 function appropriateness(c,f){
  const original=c.appFeedback?.original,rating=c.labels.feedbackRating;
+ if(f.speak&&voiceReviewed(c)&&c.labels.voiceJudgment){const cues=f.triggers?.length?f.triggers:f.trigger?[f.trigger]:[];const values=cues.map(t=>c.labels.cueLabels?.[`${t.key}:${Math.sign(t.delta)}`]);if(values.includes('incorrect'))return 'bad';if(values.length&&values.every(v=>v==='correct'))return 'good';if(original&&semantic(original)===semantic(f)&&c.labels.voiceJudgment==='correct')return 'good';if(original&&semantic(original)===semantic(f)&&c.labels.voiceJudgment==='incorrect')return 'bad';return 'unknown';}
+
  if(!f.speak)return 'silent';
  if(original&&semantic(original)===semantic(f)){if(rating==='useful')return 'good';if(rating==='inaccurate')return 'bad';if(rating==='repetitive')return 'repeated';}
  if(f.triggers?.length>1)return 'unknown';
@@ -75,11 +79,11 @@ function appropriateness(c,f){
  if(['kneeArmTiming','armLead','wristPeakTiming'].includes(key)&&label==='timing-issue')return 'good';
  return 'unknown';
 }
-const feedbackEligible=c=>c.labels.detection==='correct'&&c.comparison.confidence!=='Low'&&(!c.labels.conditions||['shotType','cameraAngle','hand'].every(k=>c.labels.conditions[k]===c.metadata[k]));
+export const feedbackEligible=c=>c.labels.detection==='correct'&&c.comparison.confidence!=='Low'&&(!c.labels.conditions||['shotType','cameraAngle','hand'].every(k=>c.labels.conditions[k]===c.metadata[k]));
 export function feedbackMetrics(cases,parameters,sessions){
  const totals={good:0,bad:0,repeated:0,unknown:0,silent:0,reviewed:0},ordered=[...cases].sort((a,b)=>a.source.recordId.localeCompare(b.source.recordId)||a.createdAt-b.createdAt||a.source.shotNumber-b.source.shotNumber);let current=null,recent=[];
  for(const c of ordered){if(c.source.recordId!==current){current=c.source.recordId;recent=[];}const s=sessions.find(s=>s.id===current),now=c.createdAt,f=(c.appFeedback.original?.version==='live-coach-0.6'?selectCoachFeedback:selectLegacyCoachFeedback)(c.comparison,{trunkEstimate:c.trunkEstimate,metricReliability:c.analysis?.voiceReliability,maxItems:c.analysis?.voiceMaxItems,focus:s?.focus??c.appFeedback.original?.focus??'automatic',recent,now,shotNumber:recent.length+1,thresholds:s?.feedbackThresholds??COACH_RULES,parameters});recent.push({number:recent.length+1,timestamp:now,coachFeedback:f});
-  if(!feedbackEligible(c)||!['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating))continue;totals.reviewed++;totals[appropriateness(c,f)]++;
+  if(!feedbackEligible(c)||!voiceReviewed(c))continue;totals.reviewed++;totals[appropriateness(c,f)]++;
  }
  const known=totals.good+totals.bad+totals.repeated;return {...totals,known,agreement:known?totals.good/known:null};
 }
@@ -90,10 +94,17 @@ export function compareFeedback(cases,sessions,baseline=defaultParameters().feed
  const train=eligible.filter(c=>trainIds.includes(c.source.recordId)),val=eligible.filter(c=>valIds.includes(c.source.recordId));
  const result={kind:'feedback',trainingIds:trainIds,validationIds:valIds,baselineParameters:baseline,candidates:[],recommended:null};
  if(trainIds.some(id=>valIds.includes(id))){result.reason='同じセッションを学習と検証に使えません。';return result;}
- const before={training:feedbackMetrics(train,baseline,sessions),validation:feedbackMetrics(val,baseline,sessions)};const reviewedSessionCount=group=>new Set(group.filter(c=>feedbackEligible(c)&&['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating)).map(c=>c.source.recordId)).size;result.progress={training:{sessions:reviewedSessionCount(train),items:before.training.reviewed,requiredSessions:2,requiredItems:20},validation:{sessions:reviewedSessionCount(val),items:before.validation.reviewed,requiredSessions:2,requiredItems:10}};
- if(new Set(train.filter(c=>feedbackEligible(c)&&['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating)).map(c=>c.source.recordId)).size<2||new Set(val.filter(c=>feedbackEligible(c)&&['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating)).map(c=>c.source.recordId)).size<2||before.training.reviewed<EVIDENCE_MIN.feedbackTrain||before.validation.reviewed<EVIDENCE_MIN.feedbackValidation){result.reason='音声ラベル不足：学習・検証それぞれ2セッション、評価済み20件／10件が必要です。';return result;}
+ const before={training:feedbackMetrics(train,baseline,sessions),validation:feedbackMetrics(val,baseline,sessions)};const reviewedSessionCount=group=>new Set(group.filter(c=>feedbackEligible(c)&&voiceReviewed(c)).map(c=>c.source.recordId)).size;result.progress={training:{sessions:reviewedSessionCount(train),items:before.training.reviewed,requiredSessions:2,requiredItems:20},validation:{sessions:reviewedSessionCount(val),items:before.validation.reviewed,requiredSessions:2,requiredItems:10}};
+ if(new Set(train.filter(c=>feedbackEligible(c)&&voiceReviewed(c)).map(c=>c.source.recordId)).size<2||new Set(val.filter(c=>feedbackEligible(c)&&voiceReviewed(c)).map(c=>c.source.recordId)).size<2||before.training.reviewed<EVIDENCE_MIN.feedbackTrain||before.validation.reviewed<EVIDENCE_MIN.feedbackValidation){result.reason='音声ラベル不足：学習・検証それぞれ2セッション、評価済み20件／10件が必要です。';return result;}
  result.before=before;
- const weights={...baseline.priorityWeights};for(const c of train){const key=c.appFeedback.original?.trigger?.key;if(!key||!feedbackEligible(c))continue;const matches=train.filter(v=>feedbackEligible(v)&&v.appFeedback.original?.trigger?.key===key),useful=matches.filter(v=>v.labels.feedbackRating==='useful').length,inaccurate=matches.filter(v=>v.labels.feedbackRating==='inaccurate').length;if(useful+inaccurate>=5)weights[key]=inaccurate>useful?.75:1.25;}
+ const weights={...baseline.priorityWeights},rated=new Map();
+ for(const c of train){if(!feedbackEligible(c)||!voiceReviewed(c))continue;const original=c.appFeedback.original;
+  const cues=original?.triggers?.length?original.triggers:original?.trigger?[original.trigger]:[];
+  for(const t of cues){if(!Object.hasOwn(metricLabel,t.key))continue;const value=c.labels.voiceJudgment!==undefined?c.labels.cueLabels?.[`${t.key}:${Math.sign(t.delta)}`]:c.labels.feedbackRating==='useful'?'correct':c.labels.feedbackRating==='inaccurate'?'incorrect':null;
+   if(!['correct','incorrect'].includes(value))continue;const counts=rated.get(t.key)??{correct:0,incorrect:0};counts[value]++;rated.set(t.key,counts);
+  }
+ }
+ for(const [key,value]of rated)if(value.correct+value.incorrect>=5)weights[key]=value.incorrect>value.correct ? .75 : 1.25;
  const choices=[['助言を出す差を少し大きくする',{meaningfulDeviation:.3}],['小さい差も助言候補にする',{meaningfulDeviation:.15}],['評価済み助言の優先順位を調整',{priorityWeights:weights}],['修正助言の繰り返しも抑える',{suppressCorrections:true,repeatShots:3,cooldownMs:6000}]];
  for(const [label,change]of choices){const parameters={...baseline,...change};result.candidates.push({label,parameters,training:feedbackMetrics(train,parameters,sessions)});}
  const best=result.candidates.filter(c=>improveFeedback(before.training,c.training)).sort((a,b)=>(a.training.bad+a.training.repeated)-(b.training.bad+b.training.repeated)||a.label.localeCompare(b.label))[0];
