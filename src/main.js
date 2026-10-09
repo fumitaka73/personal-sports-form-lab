@@ -1,3 +1,5 @@
+import {videoThumbnail} from './video-thumbnail.js';
+import appPackage from '../package.json';
 import {pointLabel} from './shot-metadata.js';
 import {mountSessionReport,mountMyProgress} from './session-report-ui.js';
 import {conditionKey,basisKey} from './session-report.js';
@@ -31,8 +33,8 @@ let sessions = [], activeSession = null, sessionShotResult = null;
 let videos = [], results = [], referenceId = null, activePage = 'good', activeResult = null;
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
-app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.16 · LIVE COACH v0.6</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
+app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="app-version" aria-label="アプリのバージョン ${appPackage.version}">v${appPackage.version.replace(/\.0$/,'')}</span><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
+<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION ${appPackage.version} · LIVE COACH v0.6</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
 <nav class="tabs" aria-label="画面選択"><button data-page="good">Good Form</button><button data-page="coach">Live Coach</button><button data-page="review">Shot Review</button><button data-page="calibration">AIの改善</button></nav><details class="other-menu"><summary>その他</summary><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="history">履歴</button><button data-page="library">保存済み動画・メモ</button></details>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
@@ -53,7 +55,7 @@ function render() {
   else if (activePage === 'session') renderSession();
   else if (activePage === 'review') renderReview();
   else if(activePage==='good-management')renderReview('good');
-  else if (activePage === 'calibration') cleanup=mountPersonalCalibration(screen,{openReview:()=>navigate('review'),sessions:coachSessions,cases:collectCases(results,sessions,coachSessions,reviewData.cases),getFreshCases:async()=>{const saved=await getSetting('review-v04');return collectCases(results,sessions,coachSessions,saved?.value?.cases??reviewData.cases);}});
+  else if (activePage === 'calibration') cleanup=mountPersonalCalibration(screen,{openReports:()=>navigate('history'),openReview:()=>navigate('review'),sessions:coachSessions,cases:collectCases(results,sessions,coachSessions,reviewData.cases),getFreshCases:async()=>{const saved=await getSetting('review-v04');return collectCases(results,sessions,coachSessions,saved?.value?.cases??reviewData.cases);}});
   else if (activePage === 'coach') cleanup=mountLiveCoach(screen,{videos:Object.values(catalog()),referenceId,reportConfig:sessionReportConfig(),onSave:async session=>{await saveCoachSession(session);coachSessions=[session,...coachSessions.filter(s=>s.id!==session.id)];}});
   else if (activePage === 'results') renderResult();
   else if (activePage === 'progress') cleanup=mountMyProgress(screen,coachSessions,progressSessionId,sessionReportConfig());
@@ -80,7 +82,7 @@ function renderUpload(isReference) {
   }
   screen.innerHTML = `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">${isReference ? 'YOUR PERSONAL BASELINE' : 'COMPARE YOUR NEXT SHOT'}</p><h2>${isReference ? 'Good Form登録' : '新しいシュートを分析'}</h2></div><span class="badge">ローカル分析</span></div>
     ${good ? `<p class="reference-summary">現在のGood Form：<strong>${escape(good.title)}</strong> · ${shotLabels[good.shotType]} / ${cameraLabels[good.cameraAngle]}${good.analysis?.lowQuality ? ' · 精度低（登録済み）' : ''}</p>${isReference&&(good.analysis?.lowQuality||good.analysis?.phaseEstimated)?'<p class="fineprint">参考値として使用できます。全身と腕が隠れない動画を同じカメラ位置で撮影してください。リリースが推定の場合は、動画でボールが手から離れる位置を確認し、「手動で修正する」でリリースを指定して再分析すると比較しやすくなります。</p>':''}${isReference ? (good.analysis?.warnings ?? []).map(w => `<p class="warning">${escape(w)}</p>`).join('') : ''}` : ''}
-    ${isReference&&good?.blob?`<video class="good-thumbnail" muted playsinline preload="metadata" src="${escape(url(good.blob))}#t=0.001" aria-label="現在のGood Form"></video>`:''}${isReference?'<button id="manage-good" class="secondary">登録済みGood Formを管理・選択</button>':''}<p class="instruction">撮影角度が違う動画や、一部の関節が見えにくい動画も受け付けます。検出できた範囲で分析し、条件が悪い場合は「精度低」と表示します。同じカメラ位置で1人のシュートを撮ると比較しやすくなります。</p>
+    ${isReference&&good?'<span id="good-thumbnail" class="good-thumbnail-placeholder">動画を確認中</span>':''}${isReference?'<button id="manage-good" class="secondary">登録済みGood Formを管理・選択</button>':''}<p class="instruction">撮影角度が違う動画や、一部の関節が見えにくい動画も受け付けます。検出できた範囲で分析し、条件が悪い場合は「精度低」と表示します。同じカメラ位置で1人のシュートを撮ると比較しやすくなります。</p>
     <div class="upload-layout"><div><label class="upload" for="upload">＋ ${isReference ? 'Good Formの動画を選ぶ' : '新しい動画を選ぶ'}<input id="upload" type="file" accept="video/*"></label><p class="upload-hint">MP4（H.264）/ WebM推奨 · 保存できる容量はブラウザによります</p>
     <label class="field">保存済みの動画から選ぶ<select id="existing"><option value="">動画を選択</option>${videos.map(v => `<option value="${escape(v.id)}">${escape(v.title)}</option>`).join('')}</select></label>
     <p id="file-name" class="filename"></p><video id="preview" controls playsinline preload="auto" hidden></video>
@@ -97,6 +99,9 @@ function renderUpload(isReference) {
     <p class="fineprint">MediaPipeで姿勢を推定し、計測差から点数を計算します。助言は計測値に基づくルールで生成します。LLMは点数を作りません。</p>
     <div id="progress-area" hidden><progress id="progress" max="100" value="0"></progress><p id="progress-text" role="status"></p><button id="cancel" class="secondary" type="button">分析をキャンセル</button></div></form></div>
     <p class="fineprint">2D映像による試作です。リリース位置の指定や撮影条件で計測値が変わります。ボールは色・丸い輪郭・連続する位置で追跡します（主にオレンジ・茶色）。誤検出や見失いがあります。手離れは2D映像からの推定です。シュート成功率は評価しません。</p></section>`;
+  const thumbnail=screen.querySelector('#good-thumbnail'),abortThumbnail=new AbortController();
+  cleanup=()=>abortThumbnail.abort();
+  if(thumbnail){if(good?.blob)void videoThumbnail(url(good.blob),good.analysis?.phases?.release??0,80,96,abortThumbnail.signal).then(canvas=>{if(thumbnail.isConnected){canvas.className='good-thumbnail';thumbnail.replaceChildren(canvas);}}).catch(()=>{if(thumbnail.isConnected)thumbnail.textContent='動画を読み込めません';});else thumbnail.textContent='動画なし';}
   const preview = document.querySelector('#preview');
   document.querySelector('#manage-good')?.addEventListener('click',()=>navigate('good-management'));
   const fileInput = document.querySelector('#upload');

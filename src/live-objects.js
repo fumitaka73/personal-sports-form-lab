@@ -21,6 +21,6 @@ export function drawObjects(canvas,video,{ball=null,hoop=null,corner=null,mirror
  if(!video.videoWidth||!canvas.width)return;const rect=video.getBoundingClientRect(),dpr=Math.min(globalThis.devicePixelRatio||1,2),ctx=canvas.getContext('2d'),t=videoTransform(video.videoWidth,video.videoHeight,rect.width,rect.height,mirror);
  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineWidth=3;ctx.setLineDash([]);
  if(ball){ctx.strokeStyle='#ffbc40';ctx.beginPath();ctx.ellipse(t.x(ball),t.y(ball),ball.radius*t.height,ball.radius*t.height,0,0,Math.PI*2);ctx.stroke();}
- if(hoop){ctx.strokeStyle='#61e9ff';ctx.setLineDash([6,4]);const a={x:hoop.x-hoop.width/2,y:hoop.y-hoop.height/2},b={x:hoop.x+hoop.width/2,y:hoop.y+hoop.height/2};ctx.strokeRect(Math.min(t.x(a),t.x(b)),t.y(a),hoop.width*t.width,hoop.height*t.height);ctx.setLineDash([]);}
+ if(hoop){ctx.strokeStyle=hoop.confirmed===false?'#ffbf47':'#61e9ff';ctx.setLineDash(hoop.confirmed===false?[6,4]:[]);const a={x:hoop.x-hoop.width/2,y:hoop.y-hoop.height/2},b={x:hoop.x+hoop.width/2,y:hoop.y+hoop.height/2};ctx.strokeRect(Math.min(t.x(a),t.x(b)),t.y(a),hoop.width*t.width,hoop.height*t.height);ctx.setLineDash([]);}
  if(corner){ctx.fillStyle='#61e9ff';ctx.beginPath();ctx.arc(t.x(corner),t.y(corner),5,0,Math.PI*2);ctx.fill();}
 }
