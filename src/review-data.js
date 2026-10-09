@@ -1,3 +1,4 @@
+import {validateSessionRating} from './session-feedback.js';
 import {compactAnalysis} from './coach-analysis.js';
 export const REVIEW_SCHEMA='sports-form-lab-review';
 export const emptyReviewData=()=>({version:1,cases:{},references:{},sessionFeedback:{},verification:{}});
@@ -75,6 +76,7 @@ if(!obj(c)||key!==c.id||!id(c.id)||c.caseVersion!==1||!Number.isFinite(c.created
  }
  for(const [key,r]of Object.entries(data.references))if(key!==r.id||!id(key)||typeof r.title!=='string'||!text(r.notes)||!meta(r)||!analysis(r.analysis))throw new Error('Good Formが不正です');
  for(const s of Object.values(data.sessionFeedback))if(!obj(s)||!['session','live'].includes(s.mode)||!id(s.recordId)||typeof s.title!=='string'||!obj(s.appFeedback)||typeof s.appFeedback.text!=='string'||!comments(s.comments))throw new Error('コーチコメントが不正です');
+ for(const s of Object.values(data.sessionFeedback))if(s.batchRating){validateSessionRating(s.batchRating);if(s.batchRating.sessionId!==s.recordId||s.mode!=='live')throw new Error('セッション評価の対象が不一致です');}
  for(const [key,v] of Object.entries(data.verification))if(!/^(session|live):.+/.test(key)||!obj(v)||!Number.isInteger(v.actualShots)||v.actualShots<0||v.actualShots>100000||typeof v.complete!=='boolean')throw new Error('検証本数が不正です');
  return clone(data);
 }

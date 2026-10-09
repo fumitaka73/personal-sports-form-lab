@@ -1,5 +1,7 @@
 # Personal Sports Form Lab
 
+新機能の利用手順・計算定義: [Session Report / My Progress / 全体フィードバック](docs/issue-3-session-report-progress.md)。
+
 最新のiPhone向け操作・互換性・検証手順: [Issue #1対応](docs/issue-1-iphone-ux.md)。基本画面はGood Form / Live Coach / Shot Review / AIの改善の4つです。
 
 自分のバスケットボールのシュートを、コーチが評価した自分の **Good Form** と比較する個人用Webアプリです。動画・姿勢データ・分析履歴はブラウザのIndexedDBに保存します。動画の外部送信、有料API、ログインはありません。

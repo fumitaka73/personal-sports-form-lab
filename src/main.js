@@ -1,3 +1,5 @@
+import {mountSessionReport,mountMyProgress} from './session-report-ui.js';
+import {conditionKey,basisKey} from './session-report.js';
 import {trunkHTML} from './trunk-proxy.js';
 import {mountAIImprovement as mountPersonalCalibration} from './ai-improvement-ui.js';
 import {expireTemporaryVideos} from './video-review.js';
@@ -6,7 +8,7 @@ import {emptyReviewData,collectCases,referenceCatalog} from './review-data.js';
 import './style.css';
 import { videoTransform, POSE_CONNECTIONS } from './pose-coordinates.js';
 import {mountLiveCoach,coachSummaryHTML} from './live-coach.js';
-import { saveCoachSession, listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis, commitSession, setSetting } from './storage.js';
+import { saveCoachSession, saveSessionRating, listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis, commitSession, setSetting } from './storage.js';
 import { analyzeVideo, seekVideo } from './pose.js';
 import { validatePhases } from './metrics.js';
 import { reviewShot } from './shot-engine.js';
@@ -22,14 +24,14 @@ const date = value => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', ti
 const shotLabels = { jump: 'ジャンプシュート', set: 'セットシュート', free: 'フリースロー' };
 const cameraLabels = { front: '正面', side: '横', diagonal: '45度' };
 const confidenceLabels = { High: '高（High）', Medium: '中（Medium）', Low: '低（精度低・Low）' };
-let reviewData=emptyReviewData(),reviewCaseId=null;
+let reviewData=emptyReviewData(),reviewCaseId=null,progressSessionId=null;
 let coachSessions = [];
 let sessions = [], activeSession = null, sessionShotResult = null;
 let videos = [], results = [], referenceId = null, activePage = 'good', activeResult = null;
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
 app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.15 · LIVE COACH v0.6</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
+<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION 0.16 · LIVE COACH v0.6</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
 <nav class="tabs" aria-label="画面選択"><button data-page="good">Good Form</button><button data-page="coach">Live Coach</button><button data-page="review">Shot Review</button><button data-page="calibration">AIの改善</button></nav><details class="other-menu"><summary>その他</summary><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="history">履歴</button><button data-page="library">保存済み動画・メモ</button></details>
 <p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
 <footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
@@ -51,8 +53,9 @@ function render() {
   else if (activePage === 'review') renderReview();
   else if(activePage==='good-management')renderReview('good');
   else if (activePage === 'calibration') cleanup=mountPersonalCalibration(screen,{openReview:()=>navigate('review'),sessions:coachSessions,cases:collectCases(results,sessions,coachSessions,reviewData.cases),getFreshCases:async()=>{const saved=await getSetting('review-v04');return collectCases(results,sessions,coachSessions,saved?.value?.cases??reviewData.cases);}});
-  else if (activePage === 'coach') cleanup=mountLiveCoach(screen,{videos:Object.values(catalog()),referenceId,onSave:async session=>{await saveCoachSession(session);coachSessions=[session,...coachSessions.filter(s=>s.id!==session.id)];}});
+  else if (activePage === 'coach') cleanup=mountLiveCoach(screen,{videos:Object.values(catalog()),referenceId,reportConfig:sessionReportConfig(),onSave:async session=>{await saveCoachSession(session);coachSessions=[session,...coachSessions.filter(s=>s.id!==session.id)];}});
   else if (activePage === 'results') renderResult();
+  else if (activePage === 'progress') cleanup=mountMyProgress(screen,coachSessions,progressSessionId,sessionReportConfig());
   else if (activePage === 'history') renderHistory();
   else renderLibrary();
 }
@@ -65,7 +68,7 @@ function renderReview(initialView){
  for(const c of cases)if(c.source.mode!=='single'&&!sessionTargets.some(s=>s.mode===c.source.mode&&s.recordId===c.source.recordId))sessionTargets.push({mode:c.source.mode,recordId:c.source.recordId,title:'移行したセッション',appFeedback:{text:'元のセッションまとめはN/A'}});
  cleanup=mountReviewHub(screen,{data:{...reviewData,references:catalog()},cases,sessionTargets,videos,initialView,openGoodManagement:()=>navigate('good-management'),openGoodUpload:()=>navigate('good'),openCalibration:()=>navigate('calibration'),manualTemplate:id=>{const s=coachSessions.find(s=>s.id===id);return s?{source:{mode:'live',recordId:id},metadata:s.metadata,goodFormReference:s.goodFormReference,scoreVersion:s.version}:null;},activeReferenceId:referenceId,initialCaseId:reviewCaseId,onDirty:value=>noteDirty=value,onSave:async data=>{busy=true;try{await setSetting('review-v04',data);reviewData=data;}finally{busy=false;}},onActivateReference:async id=>{await setSetting('referenceId',id);referenceId=id;},getVideoUrl:c=>{const video=videos.find(v=>v.id===c.source.videoId);if(!video?.blob)return null;if(!videoUrls.has(video.id))videoUrls.set(video.id,url(video.blob));return videoUrls.get(video.id);}});reviewCaseId=null;
 }
-screen.addEventListener('click',event=>{const button=event.target.closest('[data-open-review]');if(button){reviewCaseId=button.dataset.openReview;navigate('review');}});
+screen.addEventListener('click',event=>{const progress=event.target.closest('[data-my-progress]');if(progress){progressSessionId=progress.dataset.myProgress||null;navigate('progress');return;}const button=event.target.closest('[data-open-review]');if(button){reviewCaseId=button.dataset.openReview;navigate('review');}});
 const videoAnalysisLabel = () => reference()?.analysis?.lowQuality ? '（精度低の参考分析）' : '';
 const options = (values, selected) => Object.entries(values).map(([value, label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
 function renderUpload(isReference) {
@@ -354,11 +357,12 @@ function renderSessionSummary(session){
     sessionShotResult=transient;activeResult=transient.id;navigate('results');
   });
 }
+function sessionReportConfig(){return {getSessions:()=>coachSessions,hasDirty:()=>noteDirty,getReviewData:async()=>{const saved=await getSetting('review-v04');return saved?.value??reviewData;},onDirty:value=>noteDirty=value,saveRating:async(session,ratings,note)=>{busy=true;try{if(!coachSessions.some(s=>s.id===session.id))throw new Error('セッションの保存が未完了です。履歴への保存を確認してから評価してください。');reviewData=await saveSessionRating(session,ratings,note,conditionKey(session),basisKey(session));}finally{busy=false;}}};}
 function renderHistory() {
   screen.innerHTML = `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">YOUR TRAINING RECORDS</p><h2>分析履歴</h2></div><span class="badge">${results.length} 件</span></div>${!results.length ? '<p class="instruction">新しいシュートを分析すると、ここに記録されます。</p>' : `<div class="table-scroll"><table><thead><tr><th>日時・動画</th><th>シュート種別</th><th>Form Match</th><th>信頼度</th><th>操作</th></tr></thead><tbody>${results.map(r => `<tr><td>${date(r.createdAt)}<small>${escape(r.newTitle)}</small></td><td>${shotLabels[r.newMeta.shotType]}</td><td>${r.comparison.overall === null ? '—' : `${r.comparison.overall}%`}</td><td>${confidenceLabels[r.comparison.confidence]}</td><td><button class="secondary" data-result="${r.id}">結果を見る</button> <button class="delete" data-delete-result="${r.id}">削除</button></td></tr>`).join('')}</tbody></table></div>`}<p class="fineprint">履歴は分析時点の基準と計測値を保存します。別のGood Form・撮影角度・分析版の点数は、そのまま比較しないでください。</p></section>`;
   screen.insertAdjacentHTML('beforeend', sessionHistory());
-  screen.insertAdjacentHTML('beforeend',`<section class="panel"><h2>Live Coach履歴</h2>${coachSessions.map(s=>`<p>${date(s.createdAt)} · ${escape(s.goodFormReference.title)} · ${s.shots.length}本 <button class="secondary" data-coach="${s.id}">まとめを見る</button> <button class="delete" data-delete-coach="${s.id}">削除</button></p>`).join('')||'<p>まだ記録がありません。</p>'}</section>`);
-  screen.querySelectorAll('[data-coach]').forEach(b=>b.onclick=()=>{clearScreen();screen.innerHTML=coachSummaryHTML(coachSessions.find(s=>s.id===b.dataset.coach));});
+  screen.insertAdjacentHTML('beforeend',`<section class="panel"><h2>Live Coach履歴</h2><button data-my-progress="">My Progress · 成長推移</button>${coachSessions.map(s=>`<p>${date(s.createdAt)} · ${escape(s.goodFormReference.title)} · ${s.shots.length}本 <button class="secondary" data-coach="${s.id}">まとめを見る</button> <button class="delete" data-delete-coach="${s.id}">削除</button></p>`).join('')||'<p>まだ記録がありません。</p>'}</section>`);
+  screen.querySelectorAll('[data-coach]').forEach(b=>b.onclick=()=>{clearScreen();const session=coachSessions.find(s=>s.id===b.dataset.coach);cleanup=mountSessionReport(screen,session,{...sessionReportConfig(),sessions:coachSessions});});
   screen.querySelectorAll('[data-delete-coach]').forEach(b=>b.onclick=async()=>{if(!confirm('このLive Coach履歴を削除しますか？'))return;try{await deleteResult(b.dataset.deleteCoach);coachSessions=coachSessions.filter(s=>s.id!==b.dataset.deleteCoach);render();}catch{message('Live Coach履歴を削除できませんでした。',true);}});
   bindSessionLinks();
   screen.querySelectorAll('[data-result]').forEach(b => b.onclick = () => { activeResult = b.dataset.result; navigate('results'); });
