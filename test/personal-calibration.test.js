@@ -24,8 +24,8 @@ test('pose-only compact trace retains detector joints, null poses and timestamp 
 });
 test('bounded pose archive saves without video and rejects negative-origin frames; failures are not evaluation data',async()=>{
  const chunks=[],saved=[],archive=new PoseArchive({session:{id:'pose',origin:0,metadata,goodFormId:'g',createdAt:1},remaining:20000,saveChunk:async c=>chunks.push(c),saveSession:async s=>saved.push(s)});
- archive.add({time:-1,landmarks:null});for(const f of frames())archive.add({...f,aspect:1});const session=await archive.stop();assert.equal(session.complete,true);assert.equal(session.count,25);assert.equal(chunks.length,1);assert.equal(session.bytes,25*POSE_STRIDE*4);
- const blob=exportPoseTrace(session,chunks),imported=await readPoseTrace(blob);assert.equal(imported.session.count,25);assert.equal(imported.chunks[0].buffer.byteLength,session.bytes);
+ archive.add({time:-1,landmarks:null});for(const f of frames())archive.add({...f,aspect:1});const session=await archive.stop();assert.equal(session.complete,true);assert.equal(session.count,25);assert.equal(chunks.length,2);assert.equal(session.bytes,25*POSE_STRIDE*4);
+ const blob=exportPoseTrace(session,chunks),imported=await readPoseTrace(blob);assert.equal(imported.session.count,25);assert.equal(imported.chunks.reduce((n,c)=>n+c.buffer.byteLength,0),session.bytes);
  const failed=new PoseArchive({session:{id:'fail',origin:0},remaining:100,saveChunk:async()=>{},saveSession:async()=>{}});failed.add({time:1,landmarks:null});assert.equal((await failed.stop()).complete,false);
  const quota=new PoseArchive({session:{id:'quota',origin:0},saveChunk:async()=>{throw new Error('quota');},saveSession:async()=>{}});quota.add({time:1,landmarks:null});assert.equal((await quota.stop()).complete,false);
 });
