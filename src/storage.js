@@ -1,3 +1,4 @@
+import {ratingEntry} from './session-feedback.js';
 const database = new Promise((resolve, reject) => {
   const request = indexedDB.open('sports-form-lab', 4);
   request.onupgradeneeded = () => {
@@ -75,3 +76,12 @@ export async function commitCalibration(version,expectedActiveId=undefined){
 }
 export async function activeCalibration(scope){const pointer=await getSetting('active-calibration:'+scope);return pointer?.value?getCalibration(pointer.value):null;}
 export async function importCalibrations(records){const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('calibrations','readwrite'),store=tx.objectStore('calibrations');for(const row of records){const r=store.get(row.id);r.onsuccess=()=>{if(!r.result)store.add(row);};}tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
+
+// Merge one weak session rating atomically, preserving the latest comments and shot labels.
+export async function saveSessionRating(session,ratings,note,condition,basis){
+ const db=await database;return new Promise((resolve,reject)=>{
+  const tx=db.transaction('settings','readwrite'),store=tx.objectStore('settings'),request=store.get('review-v04');let saved,error;
+  request.onsuccess=()=>{try{const data=structuredClone(request.result?.value??{version:1,cases:{},references:{},sessionFeedback:{},verification:{}}),key=`live:${session.id}`;data.sessionFeedback[key]=ratingEntry(session,data.sessionFeedback[key],ratings,note,condition,basis);saved=data;store.put({id:'review-v04',value:data});}catch(e){error=e;tx.abort();}};
+  tx.oncomplete=()=>resolve(saved);tx.onerror=()=>reject(error??tx.error);tx.onabort=()=>reject(error??tx.error);
+ });
+}
