@@ -1,3 +1,4 @@
+import {referenceComparison} from './reference-comparison-data.js';
 import {workflowGuide} from './workflow-guide.js';
 import {appShell,updateShell,bindShell} from './app-shell.js';
 import {videoThumbnail} from './video-thumbnail.js';
@@ -79,8 +80,8 @@ function comparisonData(c){
  const result=c.source.mode==='single'?results.find(r=>r.id===c.source.recordId):c.source.mode==='session'?sessions.find(s=>s.id===c.source.recordId)?.shots.find(s=>s.number===c.source.shotNumber):null;
  const originalRef=c.source.mode==='session'?sessions.find(s=>s.id===c.source.recordId)?.referenceAnalysis:result?.referenceAnalysis;
  const good=videos.find(v=>v.id===c.goodFormReference.id);
- const same=a=>a&&JSON.stringify([a.version,a.analyzedAt,a.phases,a.metrics])===JSON.stringify([c.goodFormReference.analysis.version,c.goodFormReference.analysis.analyzedAt,c.goodFormReference.analysis.phases,c.goodFormReference.analysis.metrics]);
- return {reference:{analysis:originalRef??(same(good?.analysis)?good.analysis:c.goodFormReference.analysis),blob:good?.blob},current:{analysis:result?.newAnalysis??c.analysis,blob:videos.find(v=>v.id===c.source.videoId)?.blob}};
+ const resolved=referenceComparison(c.goodFormReference.analysis,originalRef,good?.analysis);
+ return {reference:{...resolved,blob:good?.blob,cropKey:good?`bone-crop-v1:${good.id}`:null,cropSignature:good?.blob?JSON.stringify([good.id,good.createdAt??null,good.blob.size,good.blob.type]):null},current:{analysis:result?.newAnalysis??c.analysis,blob:videos.find(v=>v.id===c.source.videoId)?.blob}};
 }
 screen.addEventListener('click',event=>{const go=event.target.closest('[data-goto]');if(go){navigate(go.dataset.goto);return;}const sessionReview=event.target.closest('[data-review-session]');if(sessionReview){practiceId=sessionReview.dataset.reviewSession;navigate('review');return;}const reportLink=event.target.closest('[data-session-report]');if(reportLink){practiceId=reportSessionId=reportLink.dataset.sessionReport;navigate('history');return;}const ai=event.target.closest('[data-improve-session]');if(ai){practiceId=ai.dataset.improveSession;navigate('calibration');return;}const progress=event.target.closest('[data-my-progress]');if(progress){progressSessionId=progress.dataset.myProgress||null;if(progressSessionId)practiceId=progressSessionId;navigate('progress');return;}const button=event.target.closest('[data-open-review]');if(button){reviewCaseId=button.dataset.openReview;navigate('review');}});
 const videoAnalysisLabel = () => reference()?.analysis?.lowQuality ? '（精度低の参考分析）' : '';
@@ -112,7 +113,7 @@ function renderUpload(isReference) {
     <p class="fineprint">2D映像による試作です。リリース位置の指定や撮影条件で計測値が変わります。ボールは色・丸い輪郭・連続する位置で追跡します（主にオレンジ・茶色）。誤検出や見失いがあります。手離れは2D映像からの推定です。シュート成功率は評価しません。</p></section>`;
   const thumbnail=screen.querySelector('#good-thumbnail'),abortThumbnail=new AbortController();
   cleanup=()=>abortThumbnail.abort();
-  if(thumbnail){if(good?.blob)void videoThumbnail(url(good.blob),good.analysis?.phases?.release??0,80,96,abortThumbnail.signal).then(canvas=>{if(thumbnail.isConnected){canvas.className='good-thumbnail';thumbnail.replaceChildren(canvas);}}).catch(()=>{if(thumbnail.isConnected)thumbnail.textContent='動画を読み込めません';});else thumbnail.textContent='動画なし';}
+  if(thumbnail){if(good?.blob)void videoThumbnail(url(good.blob),good.analysis?.phases?.release??0,80,96,abortThumbnail.signal,good.analysis?.frames).then(canvas=>{if(thumbnail.isConnected){canvas.className='good-thumbnail';thumbnail.replaceChildren(canvas);}}).catch(()=>{if(thumbnail.isConnected)thumbnail.textContent='動画を読み込めません';});else thumbnail.textContent='動画なし';}
   const help=document.createElement('details');help.className='app-help';help.innerHTML='<summary>撮影のコツ・分析のしくみ</summary>';screen.querySelectorAll('.panel>.instruction,.panel>.fineprint').forEach(p=>help.append(p));screen.querySelector('.panel').append(help);
   if(isReference&&good){const registration=document.createElement('details');registration.className='app-help';registration.innerHTML='<summary>別の基準フォームを登録</summary>';registration.append(screen.querySelector('.upload-layout'));help.before(registration);}
   const preview = document.querySelector('#preview');
