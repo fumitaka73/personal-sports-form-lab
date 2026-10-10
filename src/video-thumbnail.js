@@ -1,5 +1,6 @@
+import {personCrop} from './bone-comparison-data.js';
 // Decode a real frame rather than relying on Safari's metadata-only video poster.
-export async function videoThumbnail(src,time=0,width=80,height=96,signal){
+export async function videoThumbnail(src,time=0,width=80,height=96,signal,frames=null){
  const video=document.createElement('video');video.muted=true;video.playsInline=true;video.preload='auto';
  try{
   await new Promise((resolve,reject)=>{
@@ -13,6 +14,6 @@ export async function videoThumbnail(src,time=0,width=80,height=96,signal){
   });
   if(!video.videoWidth||!video.videoHeight)throw new Error('no decoded frame');
   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;canvas.setAttribute('role','img');canvas.setAttribute('aria-label','シュート動画のフレーム');
-  const scale=Math.min(width/video.videoWidth,height/video.videoHeight),w=video.videoWidth*scale,h=video.videoHeight*scale;canvas.getContext('2d').drawImage(video,(width-w)/2,(height-h)/2,w,h);return canvas;
+  const crop=Array.isArray(frames)?personCrop(frames.filter(f=>f&&Array.isArray(f.landmarks))):{x:0,y:0,width:1,height:1},sw=crop.width*video.videoWidth,sh=crop.height*video.videoHeight,scale=Math.min(width/sw,height/sh),w=sw*scale,h=sh*scale;canvas.getContext('2d').drawImage(video,crop.x*video.videoWidth,crop.y*video.videoHeight,sw,sh,(width-w)/2,(height-h)/2,w,h);canvas.dataset.crop=JSON.stringify(crop);canvas.dataset.zoom=(scale/Math.min(width/video.videoWidth,height/video.videoHeight)).toFixed(1);canvas.setAttribute('aria-label',frames?'基準フォーム動画の人物（保存姿勢から自動拡大。姿勢不足の場合は全体）':'シュート動画のフレーム');return canvas;
  }finally{video.pause();video.removeAttribute('src');video.load();}
 }

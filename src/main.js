@@ -113,7 +113,7 @@ function renderUpload(isReference) {
     <p class="fineprint">2D映像による試作です。リリース位置の指定や撮影条件で計測値が変わります。ボールは色・丸い輪郭・連続する位置で追跡します（主にオレンジ・茶色）。誤検出や見失いがあります。手離れは2D映像からの推定です。シュート成功率は評価しません。</p></section>`;
   const thumbnail=screen.querySelector('#good-thumbnail'),abortThumbnail=new AbortController();
   cleanup=()=>abortThumbnail.abort();
-  if(thumbnail){if(good?.blob)void videoThumbnail(url(good.blob),good.analysis?.phases?.release??0,80,96,abortThumbnail.signal).then(canvas=>{if(thumbnail.isConnected){canvas.className='good-thumbnail';thumbnail.replaceChildren(canvas);}}).catch(()=>{if(thumbnail.isConnected)thumbnail.textContent='動画を読み込めません';});else thumbnail.textContent='動画なし';}
+  if(thumbnail){if(good?.blob)void videoThumbnail(url(good.blob),good.analysis?.phases?.release??0,80,96,abortThumbnail.signal,good.analysis?.frames).then(canvas=>{if(thumbnail.isConnected){canvas.className='good-thumbnail';thumbnail.replaceChildren(canvas);}}).catch(()=>{if(thumbnail.isConnected)thumbnail.textContent='動画を読み込めません';});else thumbnail.textContent='動画なし';}
   const help=document.createElement('details');help.className='app-help';help.innerHTML='<summary>撮影のコツ・分析のしくみ</summary>';screen.querySelectorAll('.panel>.instruction,.panel>.fineprint').forEach(p=>help.append(p));screen.querySelector('.panel').append(help);
   if(isReference&&good){const registration=document.createElement('details');registration.className='app-help';registration.innerHTML='<summary>別の基準フォームを登録</summary>';registration.append(screen.querySelector('.upload-layout'));help.before(registration);}
   const preview = document.querySelector('#preview');
