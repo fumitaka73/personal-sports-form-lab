@@ -1,3 +1,4 @@
+import {referenceComparison} from './reference-comparison-data.js';
 import {workflowGuide} from './workflow-guide.js';
 import {appShell,updateShell,bindShell} from './app-shell.js';
 import {videoThumbnail} from './video-thumbnail.js';
@@ -79,8 +80,8 @@ function comparisonData(c){
  const result=c.source.mode==='single'?results.find(r=>r.id===c.source.recordId):c.source.mode==='session'?sessions.find(s=>s.id===c.source.recordId)?.shots.find(s=>s.number===c.source.shotNumber):null;
  const originalRef=c.source.mode==='session'?sessions.find(s=>s.id===c.source.recordId)?.referenceAnalysis:result?.referenceAnalysis;
  const good=videos.find(v=>v.id===c.goodFormReference.id);
- const same=a=>a&&JSON.stringify([a.version,a.analyzedAt,a.phases,a.metrics])===JSON.stringify([c.goodFormReference.analysis.version,c.goodFormReference.analysis.analyzedAt,c.goodFormReference.analysis.phases,c.goodFormReference.analysis.metrics]);
- return {reference:{analysis:originalRef??(same(good?.analysis)?good.analysis:c.goodFormReference.analysis),blob:good?.blob},current:{analysis:result?.newAnalysis??c.analysis,blob:videos.find(v=>v.id===c.source.videoId)?.blob}};
+ const resolved=referenceComparison(c.goodFormReference.analysis,originalRef,good?.analysis);
+ return {reference:{...resolved,blob:good?.blob,cropKey:good?`bone-crop-v1:${good.id}`:null,cropSignature:good?.blob?JSON.stringify([good.id,good.createdAt??null,good.blob.size,good.blob.type]):null},current:{analysis:result?.newAnalysis??c.analysis,blob:videos.find(v=>v.id===c.source.videoId)?.blob}};
 }
 screen.addEventListener('click',event=>{const go=event.target.closest('[data-goto]');if(go){navigate(go.dataset.goto);return;}const sessionReview=event.target.closest('[data-review-session]');if(sessionReview){practiceId=sessionReview.dataset.reviewSession;navigate('review');return;}const reportLink=event.target.closest('[data-session-report]');if(reportLink){practiceId=reportSessionId=reportLink.dataset.sessionReport;navigate('history');return;}const ai=event.target.closest('[data-improve-session]');if(ai){practiceId=ai.dataset.improveSession;navigate('calibration');return;}const progress=event.target.closest('[data-my-progress]');if(progress){progressSessionId=progress.dataset.myProgress||null;if(progressSessionId)practiceId=progressSessionId;navigate('progress');return;}const button=event.target.closest('[data-open-review]');if(button){reviewCaseId=button.dataset.openReview;navigate('review');}});
 const videoAnalysisLabel = () => reference()?.analysis?.lowQuality ? '（精度低の参考分析）' : '';

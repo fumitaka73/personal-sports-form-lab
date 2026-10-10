@@ -48,7 +48,7 @@ export function mountLivePose(container,options={}){
   if(video.videoWidth&&video.style.aspectRatio!==ratio)video.style.aspectRatio=ratio;
   if(sourceSize!==`${video.videoWidth}:${video.videoHeight}`){resetGeometry();if(detector)detector.aspect=aspect;}
   if(!video.requestVideoFrameCallback&&video.currentTime!==lastCameraTime){lastCameraTime=video.currentTime;countCamera(now);}
-  if(now-lastPoseAt>750){if(landmarks){detector?.resetContinuity();options.onPresence?.({ready:false,reason:'姿勢が途切れました。全身を映してください'});}landmarks=null;metrics=liveMetrics(null);}
+  if(now-lastPoseAt>750){options.onTrackingGap?.(now/1000);if(landmarks){detector?.resetContinuity();options.onPresence?.({ready:false,reason:'姿勢が途切れました。全身を映してください'});}landmarks=null;metrics=liveMetrics(null);}
   stage.classList.toggle('hoop-adjustable',!!(hoop||hoopCandidate));drawPose(overlay,video,landmarks,mirror);drawObjects(overlay,video,{ball:objects.current(now),hoop:hoop??hoopCandidate,corner,mirror});
   if(now-lastUI>=250){paint(now);lastUI=now;}
   const interval=1000/Number(el('live-target-fps').value);
@@ -74,8 +74,8 @@ export function mountLivePose(container,options={}){
    if(disposed||id!==token)return;video.style.aspectRatio=`${video.videoWidth} / ${video.videoHeight}`;
    const localEngine=await createPoseEngine(results=>{
     if(id!==token||disposed||inputEpoch!==geometryEpoch||performance.now()<orientationUntil)return;landmarks=results.poseLandmarks?.map(p=>({x:p.x,y:p.y,z:p.z,visibility:p.visibility}))??null;lastPoseAt=performance.now();poseTimes.push(lastPoseAt);poseTimes=poseTimes.filter(t=>lastPoseAt-t<1000);metrics=liveMetrics(landmarks,video.videoWidth/video.videoHeight);
-    options.onFrame?.({time:lastInference/1000,landmarks,aspect:video.videoWidth/video.videoHeight});
-    if(el('live-debug').checked||options.shouldDetect?.()){const snapshot=detector?.processFrame(lastInference,landmarks);options.onPresence?.(snapshot?.presence);for(const event of snapshot?.events??[])options.onShot?.(event);}
+    const allowDetection=options.onFrame?.({time:lastInference/1000,landmarks,aspect:video.videoWidth/video.videoHeight})!==false;
+    if(el('live-debug').checked||options.shouldDetect?.()){if(!allowDetection)detector?.resetContinuity('姿勢の安定を確認中');const snapshot=detector?.processFrame(lastInference,allowDetection?landmarks:null);options.onPresence?.(snapshot?.presence);for(const event of snapshot?.events??[])options.onShot?.(event);}
     if(!hoop&&!selecting&&hoopScan.due(lastPoseAt)){try{const scale=Math.min(1,240/Math.max(input.width,input.height));objectCanvas.width=Math.max(1,Math.round(input.width*scale));objectCanvas.height=Math.max(1,Math.round(input.height*scale));objectContext.drawImage(input,0,0,objectCanvas.width,objectCanvas.height);const found=hoopScan.sample(objectContext.getImageData(0,0,objectCanvas.width,objectCanvas.height),lastPoseAt);if(found){hoopCandidate=found;el('live-hoop-confirm').disabled=false;text('live-hoop-status','Hoop自動候補・未確定（色と形）。位置を確認してください');}else if(!hoopScan.remaining)text('live-hoop-status','Hoop候補なし。手動指定できます');}catch{hoopScan.confirm();text('live-hoop-status','Hoop検索不可。手動指定してください');}}
     if(objects.enabled&&lastPoseAt-objects.lastAt>=objects.interval){try{const scale=Math.min(1,240/Math.max(input.width,input.height));objectCanvas.width=Math.max(1,Math.round(input.width*scale));objectCanvas.height=Math.max(1,Math.round(input.height*scale));const started=performance.now();objectContext.drawImage(input,0,0,objectCanvas.width,objectCanvas.height);objects.sample(objectContext.getImageData(0,0,objectCanvas.width,objectCanvas.height),landmarks,lastPoseAt,el('live-hand').value);if(performance.now()-started>20&&++objects.slow>=3)objects.interval=500;}catch{objects.enabled=false;el('live-ball-enable').checked=false;text('live-ball-status','ボール処理を停止。姿勢分析は継続');}}
    });

@@ -9,5 +9,9 @@ export class CoachVoice{
  }
  deliver(feedback){this.cancel();return feedback.speak?this.say(feedback.text[this.language]):false;}
  prime(){return this.say(this.language==='ja'?'開始します':'Ready');}
- cancel(){this.synthesis?.cancel();}
+ notify(text){if(!this.available||!this.enabled||this.volume===0)return false;
+  clearTimeout(this.noticeTimer);const deadline=Date.now()+3000;
+  const attempt=()=>{if(!this.enabled||this.volume===0||Date.now()>deadline)return;if(this.synthesis.speaking||this.synthesis.pending){this.noticeTimer=setTimeout(attempt,150);return;}this.noticeTimer=null;const u=new this.Utterance(text);u.lang='ja-JP';u.volume=this.volume;u.rate=1.25;u.onerror=e=>{if(!['interrupted','canceled'].includes(e.error))this.onError('音声を再生できませんでした。画面の通知を確認してください。');};this.synthesis.speak(u);};attempt();return true;
+ }
+ cancel(){clearTimeout(this.noticeTimer);this.noticeTimer=null;this.synthesis?.cancel();}
 }
