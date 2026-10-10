@@ -1,3 +1,4 @@
+import {appShell,updateShell,bindShell} from './app-shell.js';
 import {videoThumbnail} from './video-thumbnail.js';
 import appPackage from '../package.json';
 import {pointLabel} from './shot-metadata.js';
@@ -9,6 +10,7 @@ import {expireTemporaryVideos} from './video-review.js';
 import {mountReviewHub} from './review-ui.js';
 import {emptyReviewData,collectCases,referenceCatalog} from './review-data.js';
 import './style.css';
+import './app-ui.css';
 import { videoTransform, POSE_CONNECTIONS } from './pose-coordinates.js';
 import {mountLiveCoach,coachSummaryHTML} from './live-coach.js';
 import { saveCoachSession, saveSessionRating, listVideos, listResults, getSetting, saveVideo, deleteVideo, deleteResult, commitAnalysis, commitSession, setSetting } from './storage.js';
@@ -33,11 +35,7 @@ let sessions = [], activeSession = null, sessionShotResult = null;
 let videos = [], results = [], referenceId = null, activePage = 'good', activeResult = null;
 let urls = [], cleanup = () => {}, controller = null, busy = false, noteDirty = false;
 const app = document.querySelector('#app');
-app.innerHTML = `<header><a class="brand" href="./"><span class="brand-mark">↗</span> SPORTS FORM LAB</a><span class="app-version" aria-label="アプリのバージョン ${appPackage.version}">v${appPackage.version.replace(/\.0$/,'')}</span><span class="header-label">BASKETBALL · PERSONAL BASELINE</span></header>
-<main><section class="intro"><div><p class="eyebrow">BASKETBALL SHOOTING / VERSION ${appPackage.version} · LIVE COACH v0.6</p><h1>いいフォームを、<br>次のシュートへ。</h1><p class="lead">自分のGood Formと比較して、次に意識することを見つける。</p></div><div class="intro-aside"><span class="circle">↗</span><p>YOUR FORM. YOUR REFERENCE.</p></div></section>
-<nav class="tabs" aria-label="画面選択"><button data-page="good">Good Form</button><button data-page="coach">Live Coach</button><button data-page="review">Shot Review</button><button data-page="calibration">AIの改善</button></nav><details class="other-menu"><summary>その他</summary><button data-page="analyze">Single Shot</button><button data-page="session">Session</button><button data-page="history">履歴</button><button data-page="library">保存済み動画・メモ</button></details>
-<p id="status" role="status" aria-live="polite"></p><section id="screen"></section>
-<footer><span>PERSONAL SPORTS FORM LAB</span><span>動画・分析結果はこのブラウザに保存。動画の外部送信なし。<br>ブラウザのデータを消すと記録も消えます。元の動画は別途保管してください。</span></footer></main>`;
+app.innerHTML=appShell(appPackage.version);bindShell();
 const screen = document.querySelector('#screen');
 const status = document.querySelector('#status');
 function message(text, error = false) { status.textContent = text; status.classList.toggle('error', error); }
@@ -49,7 +47,7 @@ function navigate(page) {
   activePage = page; message(''); render();
 }
 function render() {
-  clearScreen();document.querySelector('.other-menu').open=false;
+  clearScreen();document.querySelector('.other-menu').open=false;updateShell(activePage);window.scrollTo(0,0);
   document.querySelectorAll('[data-page]').forEach(button => { button.classList.toggle('active', button.dataset.page === (activePage==='good-management'?'good':activePage)); button.setAttribute('aria-current', button.dataset.page === (activePage==='good-management'?'good':activePage) ? 'page' : 'false'); });
   if (activePage === 'good' || activePage === 'analyze') renderUpload(activePage === 'good');
   else if (activePage === 'session') renderSession();
@@ -102,6 +100,8 @@ function renderUpload(isReference) {
   const thumbnail=screen.querySelector('#good-thumbnail'),abortThumbnail=new AbortController();
   cleanup=()=>abortThumbnail.abort();
   if(thumbnail){if(good?.blob)void videoThumbnail(url(good.blob),good.analysis?.phases?.release??0,80,96,abortThumbnail.signal).then(canvas=>{if(thumbnail.isConnected){canvas.className='good-thumbnail';thumbnail.replaceChildren(canvas);}}).catch(()=>{if(thumbnail.isConnected)thumbnail.textContent='動画を読み込めません';});else thumbnail.textContent='動画なし';}
+  const help=document.createElement('details');help.className='app-help';help.innerHTML='<summary>撮影のコツ・分析のしくみ</summary>';screen.querySelectorAll('.panel>.instruction,.panel>.fineprint').forEach(p=>help.append(p));screen.querySelector('.panel').append(help);
+  if(isReference&&good){const registration=document.createElement('details');registration.className='app-help';registration.innerHTML='<summary>別のGood Formを登録</summary>';registration.append(screen.querySelector('.upload-layout'));help.before(registration);}
   const preview = document.querySelector('#preview');
   document.querySelector('#manage-good')?.addEventListener('click',()=>navigate('good-management'));
   const fileInput = document.querySelector('#upload');
