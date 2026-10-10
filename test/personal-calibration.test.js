@@ -52,3 +52,10 @@ test('parameter validation and version imports cannot activate or leak splits; s
  const v={id:'v1',scope:scopeKey(metadata,'g'),engine:CALIBRATION_ENGINE,createdAt:1,parameters:params,trainingIds:['a'],validationIds:['b']};const backup={schema:CALIBRATION_SCHEMA,version:1,versions:[v]};assert.equal(validateCalibrationBackup(backup)[0].imported,true);assert.throws(()=>validateCalibrationBackup({...backup,versions:[{...v,validationIds:['a']}]}));
  const comparison={overall:70,confidence:'Medium',metrics:[{key:'wristHeight',group:'release',delta:-.4,tolerance:.6}]},snapshot=structuredClone(comparison);selectCoachFeedback(comparison,{parameters:{meaningfulDeviation:.3,priorityWeights:{wristHeight:.75}}});assert.deepEqual(comparison,snapshot);
 });
+test('bad advice is negative evidence for the original advice; generic bad form cannot invent direction',()=>{
+ const d=voiceDataset();for(const c of d.cases){c.labels.feedbackRating='bad';c.labels.voiceJudgment='correct';}
+ const r=compareFeedback(d.cases,d.sessions);assert.equal(r.before.training.bad,20);assert.equal(r.before.training.good,0);assert.ok(r.candidates.every(v=>v.training.good===0));
+ const low=structuredClone(d);low.cases[0].comparison.confidence='Low';const insufficient=compareFeedback(low.cases,low.sessions);assert.equal(insufficient.recommended,null);assert.equal(insufficient.progress.training.items,19);
+ const f=voiceDataset();for(const c of f.cases){c.labels.feedbackRating='unreviewed';c.labels.submetrics.release='bad';}
+ const unknown=compareFeedback(f.cases,f.sessions);assert.equal(unknown.recommended,null);assert.equal(unknown.before,undefined);assert.equal(unknown.progress.training.items,0);
+});

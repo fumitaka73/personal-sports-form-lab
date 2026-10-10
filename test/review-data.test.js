@@ -25,3 +25,8 @@ test('optional points metadata round trips without changing legacy cases, and in
  const f=fixture();for(const points of [undefined,'unspecified','2pt','3pt']){const live={...f.live,metadata:{...f.live.metadata,...(points===undefined?{}:{points})}},cases=collectCases([],[],[live]),json=exportReviewData(emptyReviewData(),cases),read=validateReviewImport(JSON.parse(JSON.stringify(json)));assert.equal(read.cases['live:camera:1'].metadata.points,points);}
  const json=exportReviewData(emptyReviewData(),collectCases([],[],[f.live]));json.data.cases['live:camera:1'].metadata.points='guessed';assert.throws(()=>validateReviewImport(json));
 });
+test('bad form and advice labels round trip with history and counts without rescoring',async()=>{
+ const {annotateCase}=await import('../src/review-data.js'),f=fixture(),old=collectCases([],[],[f.live])[0],updated=annotateCase(old,{...old.labels,feedbackRating:'bad',submetrics:{dip:'bad',elbow:'bad',release:'too-low'}}),next=annotateCase(updated,{...updated.labels,submetrics:{...updated.labels.submetrics,dip:'good'}});
+ const data=validateReviewImport(JSON.parse(JSON.stringify(exportReviewData(emptyReviewData(),[next])))),c=data.cases[next.id];assert.equal(c.labels.feedbackRating,'bad');assert.equal(c.annotationHistory.at(-1).labels.submetrics.dip,'bad');assert.equal(c.comparison.overall,old.comparison.overall);
+ const r=evaluationReport([c],data);assert.equal(r.selfFeedback.bad,1);assert.equal(r.selfFeedback.total,1);assert.equal(r.formRatings.elbow.bad,1);assert.equal(r.formRatings.dip.good,1);assert.equal(r.formRatings.release.specific,1);assert.equal(old.labels.feedbackRating,undefined);
+});

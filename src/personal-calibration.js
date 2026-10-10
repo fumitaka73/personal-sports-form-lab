@@ -64,6 +64,8 @@ const metricLabel={kneeAngle:'dip',kneeArmTiming:'timing',wristHeight:'release',
 function semantic(f){if(f.triggers?.length)return f.triggers.map(t=>`${t.key}:${Math.sign(t.delta)}`).sort().join('|');return f.trigger?`${f.trigger.key}:${Math.sign(f.trigger.delta)}`:['good','perfect'].includes(f.code)?'praise':f.code;}
 function appropriateness(c,f){
  const original=c.appFeedback?.original,rating=c.labels.feedbackRating;
+ // Overall lack of usefulness is distinct from correctness of individual cues.
+ if(rating==='bad'&&f.speak&&original&&semantic(original)===semantic(f))return 'bad';
  if(f.speak&&voiceReviewed(c)&&c.labels.voiceJudgment){const cues=f.triggers?.length?f.triggers:f.trigger?[f.trigger]:[];const values=cues.map(t=>c.labels.cueLabels?.[`${t.key}:${Math.sign(t.delta)}`]);if(values.includes('incorrect'))return 'bad';if(values.length&&values.every(v=>v==='correct'))return 'good';if(original&&semantic(original)===semantic(f)&&c.labels.voiceJudgment==='correct')return 'good';if(original&&semantic(original)===semantic(f)&&c.labels.voiceJudgment==='incorrect')return 'bad';return 'unknown';}
 
  if(!f.speak)return 'silent';
@@ -71,7 +73,7 @@ function appropriateness(c,f){
  if(f.triggers?.length>1)return 'unknown';
  if(!f.trigger)return 'unknown';
  const label=c.labels.submetrics?.[metricLabel[f.trigger.key]];
- if(!label||['unreviewed','not-assessable'].includes(label))return 'unknown';
+ if(!label||['unreviewed','not-assessable','bad'].includes(label))return 'unknown';
  if(label==='good')return 'bad';
  const sign=Math.sign(f.trigger.delta),key=f.trigger.key;
  if(key==='kneeAngle')return (label==='too-shallow'&&sign>0||label==='too-deep'&&sign<0)?'good':'bad';

@@ -7,8 +7,9 @@ export function quickLabels(c,judgment){
  return {...c.labels,detection:'correct',voiceJudgment:judgment,cueLabels:Object.fromEntries(reviewCues(c).map(t=>[t.key,judgment==='correct'?'correct':judgment==='incorrect'?'incorrect':'unknown']))};
 }
 export function voiceReviewed(c){
+ if(c.labels.feedbackRating==='bad')return !!c.appFeedback?.original&&c.appFeedback.original.speak!==false;
  if(c.labels.voiceJudgment!==undefined)return !!c.appFeedback?.original&&c.appFeedback.original.speak!==false&&(['correct','incorrect'].includes(c.labels.voiceJudgment)||c.labels.voiceJudgment==='partial'&&Object.values(c.labels.cueLabels??{}).some(v=>v!=='unknown'));
- return ['useful','inaccurate','repetitive'].includes(c.labels.feedbackRating);
+ return ['useful','bad','inaccurate','repetitive'].includes(c.labels.feedbackRating);
 }
 export function audioStatus(c){
  if(c.source.mode!=='live')return '（画面の助言）';
