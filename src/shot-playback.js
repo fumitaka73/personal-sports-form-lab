@@ -29,11 +29,14 @@ export function setupShotPlayback(player, seek, onLabel, onError, onFrame=()=>{}
     }catch(error){if(!disposed&&id===sequence)onError(error);}
     finally{if(id===sequence)selecting=false;}
   }
+  const ended=()=>{if(selected&&Number.isFinite(player.duration)&&player.duration<selected.end-.15)onError(new Error('動画を最後まで再生できませんでした。録画が短い可能性があります。元動画を確認してください。'));};
+  player.addEventListener('ended',ended);
   player.addEventListener('timeupdate',bound);player.addEventListener('seeked',bound);player.addEventListener('play',play);tick();
   return {
     select,
+    full:async()=>{selected=null;++sequence;selecting=false;player.currentTime=0;try{await player.play();}catch(e){onError(e);}},
     replay:()=>selected?select(selected):Promise.resolve(),
     release:()=>selected?select(selected,false,true):Promise.resolve(),
-    dispose:()=>{disposed=true;++sequence;player.pause();cancelAnimationFrame(raf);player.removeEventListener('timeupdate',bound);player.removeEventListener('seeked',bound);player.removeEventListener('play',play);}
+    dispose:()=>{disposed=true;++sequence;player.pause();cancelAnimationFrame(raf);player.removeEventListener('ended',ended);player.removeEventListener('timeupdate',bound);player.removeEventListener('seeked',bound);player.removeEventListener('play',play);}
   };
 }

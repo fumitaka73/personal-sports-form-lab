@@ -385,7 +385,13 @@ function renderLibrary() {
     noteDirty = false;
     const video = videos.find(v => v.id === b.dataset.video);
     const panel = document.querySelector('#library-detail'); panel.querySelector('video')?.pause();
-    panel.innerHTML = `<h3>${escape(video.title)}</h3><video controls playsinline src="${url(video.blob)}"></video><label class="field">メモ<textarea id="library-notes" rows="5">${escape(video.notes)}</textarea></label><button id="save-notes" class="primary">メモを保存</button> <button id="delete-video" class="delete">動画を削除</button>`;
+    panel.innerHTML = `<h3>${escape(video.title)}</h3><video controls playsinline src="${url(video.blob)}"></video><p id="library-play-state" role="status" aria-live="polite"></p><button id="library-retry" class="secondary">再生をやり直す</button><a id="library-download" download>元動画をダウンロード</a><label class="field">メモ<textarea id="library-notes" rows="5">${escape(video.notes)}</textarea></label><button id="save-notes" class="primary">メモを保存</button> <button id="delete-video" class="delete">動画を削除</button>`;
+    const libraryPlayer=panel.querySelector('video'),playState=panel.querySelector('#library-play-state');
+    libraryPlayer.onplaying=()=>playState.textContent='再生中';libraryPlayer.onpause=()=>playState.textContent='一時停止';libraryPlayer.onended=()=>playState.textContent='再生完了';
+    libraryPlayer.onwaiting=libraryPlayer.onstalled=()=>playState.textContent='動画の読み込み待ちです。止まったままの場合は再生をやり直すか元動画を保存してください。';
+    libraryPlayer.onerror=()=>{console.error('Saved video playback failed',libraryPlayer.error);playState.textContent='動画を最後まで再生できませんでした。再試行または元動画のダウンロードを使ってください。';};
+    panel.querySelector('#library-retry').onclick=async()=>{try{libraryPlayer.load();await libraryPlayer.play();}catch(e){console.error('Saved video retry failed',e);playState.textContent='再生できませんでした。元動画をダウンロードして確認してください。';}};
+    const download=panel.querySelector('#library-download');download.href=libraryPlayer.src;download.download=`${video.id}.${video.blob.type.includes('mp4')?'mp4':'webm'}`;
     const notes = document.querySelector('#library-notes'); notes.oninput = () => noteDirty = notes.value !== video.notes;
     document.querySelector('#save-notes').onclick = async () => {
       const updated = { ...video, notes: notes.value };
