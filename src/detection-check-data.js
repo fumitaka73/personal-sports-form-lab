@@ -1,0 +1,34 @@
+export const CHECK_SCHEMA='detection-check-1';
+export const CANDIDATE_RULE='loose-arm-rise-1';
+export const DUPLICATE_SECONDS=.7;
+export function initialCheck(session,external={}){
+ const items=(session.shots??[]).filter(s=>Number.isFinite(s.detectorEvent?.phases?.release??s.analysis?.phases?.release)).map(s=>{const time=s.detectorEvent?.phases?.release??s.analysis.phases.release,review=external[`live:${session.id}:${s.number}`];return {id:`detected:${s.number}`,kind:'detected',time,originalTime:time,original:structuredClone(s.detectorEvent??{phases:s.analysis.phases}),shotNumber:s.number,label:review?.labels?.detection==='correct'?'yes':review?.labels?.detection==='false-positive'?'no':null,externalReviewId:review?.id??null,originalReviewLabel:review?.labels?.detection??null,confidence:s.comparison?.confidence??'unknown',reasons:['練習中の自動検出']};});
+ for(const review of Object.values(external)){if(review.manualAdded&&review.source?.recordId===session.id&&Number.isFinite(review.analysis?.phases?.release))items.push({id:'legacy-manual:'+review.id,kind:'manual',time:review.analysis.phases.release,originalTime:null,label:review.labels?.detection==='false-positive'?'no':'yes',externalReviewId:review.id,confidence:'human',reasons:['既存レビューで手動追加済み'],source:'legacy-review'});}
+ items.sort((a,b)=>a.time-b.time);
+ return {schema:CHECK_SCHEMA,sessionId:session.id,revision:0,ruleVersion:CANDIDATE_RULE,items,history:[],past:[],future:[],completedAt:null};
+}
+export function timelineBounds(session,rows,pose){
+ const ranges=rows.filter(r=>r.kind!=='shot-clip').map(r=>({start:r.start,end:r.end}));if(pose&&Number.isFinite(pose.origin)&&Number.isFinite(pose.end))ranges.push({start:pose.origin,end:pose.end});
+ if(!ranges.length)return null;return {start:Math.min(...ranges.map(r=>r.start)),end:Math.max(...ranges.map(r=>r.end)),ranges};
+}
+export function validateTime(time,bounds){if(!Number.isFinite(time)||!bounds||time<bounds.start||time>bounds.end)throw new Error('保存された練習の範囲内で時刻を選んでください。');}
+export function duplicate(items,time,except){return items.find(i=>i.id!==except&&i.label!=='no'&&Math.abs(i.time-time)<DUPLICATE_SECONDS);}
+export function changeCheck(data,command,bounds,now=Date.now()){
+ const d=structuredClone(data),before={items:d.items,completedAt:d.completedAt};let after=structuredClone(before);
+ if(command.type==='undo'||command.type==='redo'){
+  const from=command.type==='undo'?d.past:d.future,to=command.type==='undo'?d.future:d.past,id=from.pop();if(!id)throw new Error(command.type==='undo'?'取り消せる操作がありません。':'やり直せる操作がありません。');const action=d.history.find(h=>h.id===id);for(const patch of action.changes){const value=command.type==='undo'?patch.before:patch.after;after.items=after.items.filter(i=>i.id!==patch.id);if(value)after.items.push(structuredClone(value));}after.items.sort((a,b)=>a.time-b.time);after.completedAt=command.type==='undo'?action.completedBefore:action.completedAfter;to.push(id);d.history.push({id:crypto.randomUUID(),type:command.type,target:id,at:now});
+ }else{
+  if(command.type==='finish')after.completedAt=now;
+  else if(command.type==='candidates'){
+   for(const item of command.items){validateTime(item.time,bounds);if(!duplicate(after.items,item.time)&&!after.items.some(i=>i.id===item.id))after.items.push(structuredClone(item));}after.items.sort((a,b)=>a.time-b.time);
+  }else if(command.type==='add'){
+   validateTime(command.time,bounds);if(duplicate(after.items,command.time))throw new Error('近い時刻に登録済みのシュート・候補があります。一覧で確認・時刻調整してください。');after.items.push({id:crypto.randomUUID(),kind:'manual',originalTime:null,time:command.time,label:'yes',confidence:'human',reasons:['本人が動画・姿勢から手動追加'],source:'touch'});after.items.sort((a,b)=>a.time-b.time);after.completedAt=null;
+  }else if(command.type==='set'){
+   const item=after.items.find(i=>i.id===command.id);if(!item)throw new Error('確認対象がありません。');if(!['yes','no','later'].includes(command.label))throw new Error('正しい確認結果を選んでください。');const time=command.time??item.time;validateTime(time,bounds);if(command.label==='yes'&&duplicate(after.items,time,item.id))throw new Error('近い時刻のシュートと重複します。時刻を見直してください。');item.time=time;item.label=command.label;item.source='touch';item.reviewedAt=now;after.completedAt=null;
+  }else throw new Error('未対応の操作です。');
+  const ids=new Set([...before.items,...after.items].map(i=>i.id)),changes=[...ids].map(id=>({id,before:before.items.find(i=>i.id===id)??null,after:after.items.find(i=>i.id===id)??null})).filter(p=>JSON.stringify(p.before)!==JSON.stringify(p.after));if(!changes.length&&before.completedAt===after.completedAt)return d;const action={id:crypto.randomUUID(),type:command.type,at:now,changes,completedBefore:before.completedAt,completedAfter:after.completedAt};d.history.push(action);d.past.push(action.id);d.future=[];
+ }
+ d.items=after.items;d.completedAt=after.completedAt;d.revision++;return d;
+}
+export function checkCounts(d){return {detected:d.items.filter(i=>i.kind==='detected').length,pending:d.items.filter(i=>i.kind==='candidate'&&(!i.label||i.label==='later')).length,corrected:d.items.filter(i=>i.kind==='manual'||i.kind==='candidate'&&i.label==='yes'||i.label==='no'||i.time!==i.originalTime&&i.originalTime!==null).length,confirmed:d.items.filter(i=>i.label==='yes').length};}
+export function verificationExport(data,session,rows,pose){return {schema:CHECK_SCHEMA,exportedAt:Date.now(),note:'局所的な候補確認です。全練習の正解一覧・AI正答率ではありません。判定設定へ自動適用しません。',session:{id:session.id,createdAt:session.createdAt,endedAt:session.endedAt,metadata:session.metadata,model:session.poseModel??null,appVersion:session.appVersion??null,captureVersion:session.captureVersion??null,detectorVersion:session.detectorRuleVersion??null,sessionRecordVersion:session.version??null,calibrationEngine:session.calibrationEngine??null,detectorParameters:session.calibrationParameters?.detector??null,guardVersion:session.detectionGuardVersion??null,calibrationVersionId:session.calibrationVersionId??null,originalDetection:(session.shots??[]).map(s=>({number:s.number,event:s.detectorEvent??null,phases:s.analysis?.phases??null}))},videoReferences:rows.map(r=>({id:r.id,start:r.start,end:r.end,kind:r.kind??'segment',bytes:r.bytes,keep:r.keep})),poseReference:pose?{id:pose.id,schema:pose.schema,origin:pose.origin,end:pose.end,status:pose.status,count:pose.count}:null,review:{...structuredClone(data),items:data.items.map(i=>({...structuredClone(i),videoReferenceIds:rows.filter(r=>r.kind!=='shot-clip'&&r.start<i.time+2.5&&r.end>i.time-2.5).map(r=>r.id),poseReferenceId:pose?.id??null,reviewWindow:{start:i.time-2.5,end:i.time+2.5}}))}};}
