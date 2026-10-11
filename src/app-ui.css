@@ -14,3 +14,17 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 
 .is-coaching>.coach-history{display:none}
 .bone-crop-status,.bone-crop-help,.bone-anchor-note{font-size:12px;overflow-wrap:anywhere}.bone-panes article>button{width:100%;max-width:100%;font-size:12px;margin:4px 0;white-space:normal}.bone-compare[data-focus=reference] [data-bone-side="1"],.bone-compare[data-focus=current] [data-bone-side="0"]{display:none}.bone-compare[data-focus=reference] .bone-panes,.bone-compare[data-focus=current] .bone-panes{grid-template-columns:1fr}
+/* Stable, compact comparison workspace with adjacent touch controls. */
+.bone-workspace{position:sticky;top:calc(var(--header-height,56px) + env(safe-area-inset-top));z-index:3;background:var(--app-surface,#fff);border-radius:12px;padding:4px;scroll-margin-top:80px}
+.bone-workspace .bone-stage{height:clamp(110px,calc(100dvh - 370px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),230px)}
+.bone-workspace h3{margin:4px 0;font-size:12px}
+.bone-workspace .bone-note{height:20px;line-height:20px;margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+.bone-workspace .bone-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.bone-workspace .bone-controls button{min-height:44px;padding:6px 2px;font-size:12px;white-space:nowrap}
+.bone-workspace .bone-slider{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:11px;min-width:0}
+.bone-workspace .bone-slider input{flex:1;min-width:0;min-height:44px;margin:0}
+.bone-settings,.bone-side-details>details,.bone-explanation{margin-top:6px;border:1px solid #455161;border-radius:10px;padding:0 8px}
+.bone-settings label,.bone-side-details label{display:block;margin:8px 0}
+.bone-side-details button,.bone-settings button{min-height:44px;width:100%;margin:4px 0}
+.bone-side-details p{font-size:12px;overflow-wrap:anywhere}
+@media(orientation:landscape) and (max-height:540px){.bone-workspace .bone-stage{height:clamp(80px,calc(100dvh - 270px),180px)}.bone-workspace .bone-controls{grid-template-columns:repeat(6,minmax(0,1fr))}.bone-workspace .bone-slider{grid-column:1/-1}}
