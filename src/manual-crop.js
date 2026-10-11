@@ -5,10 +5,10 @@ export function sourcePoint(px,py,sw,sh,width,height,mirror=false){const t=cropT
 // Pointer events cover touch and mouse. Crop is expressed in original video
 // coordinates, so resizing and mirroring never change saved region identity.
 export function mountManualCrop(side,{update,onChange}){
- const button=side.root.querySelector('[data-crop-edit]'),canvas=side.canvas;let start=null,activePointer=null;
+ const button=(side.controls??side.root).querySelector('[data-crop-edit]'),canvas=side.canvas;let start=null,activePointer=null;
  const point=e=>{const r=side.stage.getBoundingClientRect(),sw=side.video.videoWidth||side.analysis.aspect*480||480,sh=side.video.videoHeight||480;return sourcePoint(e.clientX-r.left,e.clientY-r.top,sw,sh,r.width,r.height,side.mirror);};
  const exit=()=>{side.selectingCrop=false;side.cropPreview=null;start=null;activePointer=null;canvas.style.touchAction='';button.textContent='人物の範囲を指で囲む';update();};
- button.onclick=()=>{if(side.selectingCrop){exit();return;}side.selectingCrop=true;canvas.style.touchAction='none';button.textContent='範囲指定をやめる';side.root.querySelector('.bone-crop-help').textContent='全体表示の人物を、頭から足までドラッグで囲んでください。拡大は比較表示だけに適用します。';update();};
+ button.onclick=()=>{if(side.selectingCrop){exit();return;}side.selectingCrop=true;canvas.style.touchAction='none';button.textContent='範囲指定をやめる';(side.controls??side.root).querySelector('.bone-crop-help').textContent='全体表示の人物を、頭から足までドラッグで囲んでください。拡大は比較表示だけに適用します。';update();};
  const down=e=>{if(!side.selectingCrop||activePointer!==null)return;const p=point(e);if(!p)return;e.preventDefault();start=p;activePointer=e.pointerId;canvas.setPointerCapture(e.pointerId);};
  const move=e=>{if(activePointer!==e.pointerId||!start)return;const p=point(e);if(!p)return;e.preventDefault();side.cropPreview=dragCrop(start,p);update();};
  const up=e=>{if(activePointer!==e.pointerId||!start)return;const p=point(e),distance=p?Math.hypot(p.x-start.x,p.y-start.y):0;const crop=p&&distance>.02?dragCrop(start,p):null;exit();if(crop&&safeCrop(crop)){side.crop=crop;side.manualCrop=true;onChange();update();}};
