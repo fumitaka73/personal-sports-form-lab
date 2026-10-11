@@ -1,0 +1,14 @@
+import {CANDIDATE_RULE,DUPLICATE_SECONDS} from './detection-check-data.js';
+function feature(f,hand){if(!Number.isFinite(f.time)||f.aspect!==undefined&&(!Number.isFinite(f.aspect)||f.aspect<=0))return null;const ids=hand==='left'?[11,13,15,23]:[12,14,16,24],p=ids.map(id=>f.landmarks?.[id]);if(p.some(v=>!v||!Number.isFinite(v.visibility)||v.visibility<.35||v.visibility>1||!Number.isFinite(v.x)||!Number.isFinite(v.y)||v.x<-.05||v.x>1.05||v.y<-.05||v.y>1.05))return null;const [s,e,w,h]=p,torso=Math.hypot((s.x-h.x)*(f.aspect??1),s.y-h.y);if(torso<.06||s.y>=h.y)return null;const a={x:(s.x-e.x)*(f.aspect??1),y:s.y-e.y},b={x:(w.x-e.x)*(f.aspect??1),y:w.y-e.y},den=Math.hypot(a.x,a.y)*Math.hypot(b.x,b.y);if(den<.002)return null;return {time:f.time,wrist:w.y,shoulder:s.y,hip:h.y,torso,angle:Math.acos(Math.max(-1,Math.min(1,(a.x*b.x+a.y*b.y)/den)))*180/Math.PI,visibility:Math.min(...p.map(v=>v.visibility)),cx:(s.x+h.x)/2};}
+// Independent, deliberately loose exploration of wrist rises and arm extension.
+// No scoring, no live detector state or approved threshold reuse; these are not truth labels.
+export function scanCandidates(frames,session){const found=[],window=[];let previous=null,lastCandidate=-Infinity,valid=0,total=0;
+ for(const frame of frames){total++;const f=feature(frame,session.metadata?.hand??'right');if(!f){window.length=0;previous=null;continue;}valid++;
+  if(previous&&(f.time-previous.time>.25||f.time<=previous.time||Math.abs(f.cx-previous.cx)>.18)){window.length=0;}previous=f;window.push(f);while(window.length&&f.time-window[0].time>1.6)window.shift();if(window.length<5||f.time-window[0].time<.25)continue;
+  const low=window.reduce((a,b)=>a.wrist>b.wrist?a:b),rise=(low.wrist-f.wrist)/f.torso,extension=f.angle-low.angle,duration=f.time-low.time;
+  if(duration<.2||duration>1.4||rise<.35||f.wrist>f.shoulder+.08||f.angle<125||extension<12||f.time-lastCandidate<1.2)continue;
+  const recent=window.slice(-3);if(recent.some(v=>v.angle<115||v.wrist>v.shoulder+.12))continue;
+  const time=f.time;if((session.shots??[]).some(s=>{const p=s.detectorEvent?.phases??s.analysis?.phases;return p&&(time>=p.start-.3&&time<=p.end+.3||Math.abs(p.release-time)<DUPLICATE_SECONDS);}))continue;
+  const strength=rise+Math.max(0,extension)/90,confidence=rise>.7&&extension>30&&f.visibility>=.65?'Medium':'Low';found.push({id:`candidate:${Math.round(time*10)}`,kind:'candidate',originalTime:time,time,label:null,confidence,priority:Math.round(strength*100),ruleVersion:CANDIDATE_RULE,evidence:{riseTorsoUnits:rise,elbowExtension:extension,duration,visibility:f.visibility},reasons:['手首が下から肩付近へ上昇','腕の伸展が複数フレームで続いた',...(Math.abs(f.hip-low.hip)>.015?['身体の上下動あり']:[])]});lastCandidate=time;window.length=0;
+ }
+ return {items:found.slice(0,500),validFrames:valid,totalFrames:total,truncated:found.length>500};}

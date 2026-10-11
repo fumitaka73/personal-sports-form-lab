@@ -100,3 +100,16 @@ export async function loadPoseWindow(id,start,end,maxFrames=600){
  tx.oncomplete=()=>resolve(frames);tx.onerror=()=>reject(tx.error);
  });
 }
+
+// Detection checks live in a separate settings record, with optimistic concurrency.
+export async function commitDetectionCheck(next,expectedRevision){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('settings','readwrite'),store=tx.objectStore('settings'),id='detection-check:'+next.sessionId,r=store.get(id);let error;
+ r.onsuccess=()=>{try{if((r.result?.value?.revision??0)!==expectedRevision){error=new Error('別の画面で確認結果が更新されました。再読み込みしてください。');tx.abort();return;}store.put({id,value:next});}catch(e){error=e;tx.abort();}};tx.oncomplete=resolve;tx.onerror=()=>reject(error??tx.error);tx.onabort=()=>reject(error??tx.error);
+ });
+}
+export async function retainDetectionVideos(ids){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('temporaryVideos','readwrite'),store=tx.objectStore('temporaryVideos');for(const id of ids){const r=store.get(id);r.onsuccess=()=>{if(r.result)store.put({...r.result,keep:true});};}tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
+}
+export async function saveTemporaryVideoBounded(row,limit=128*1024*1024){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('temporaryVideos','readwrite'),store=tx.objectStore('temporaryVideos'),r=store.getAll();let error;r.onsuccess=()=>{const total=r.result.filter(v=>v.id!==row.id).reduce((n,v)=>n+(v.bytes??v.blob?.size??0),0);if(total+row.bytes>limit){error=new Error('動画の容量上限です。既存動画は削除しません。必要な動画を書き出してから整理してください。');tx.abort();return;}store.put(row);};tx.oncomplete=resolve;tx.onerror=()=>reject(error??tx.error);tx.onabort=()=>reject(error??tx.error);});
+}

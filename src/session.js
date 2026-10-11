@@ -1,3 +1,4 @@
+export const SESSION_POSE_RULE_VERSION='session-pose-1';
 import { shotCandidates, shotMotionRows } from './auto-phases.js';
 export const SESSION_POSE_THRESHOLDS=Object.freeze({prepHeight:.7,prepElbow:165,peakHeight:.15,minRise:.28,minExtendedElbow:100,minExtension:8,minStrength:.12});
 export function detectSessionShots(frames, hand, aspect, range, parameters=SESSION_POSE_THRESHOLDS) {
