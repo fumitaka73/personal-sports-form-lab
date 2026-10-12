@@ -55,7 +55,7 @@ function render() {
   document.querySelectorAll('[data-page]').forEach(button => { button.classList.toggle('active', button.dataset.page === (activePage==='good-management'?'good':activePage==='detection-check'?'review':activePage)); button.setAttribute('aria-current', button.dataset.page === (activePage==='good-management'?'good':activePage==='detection-check'?'review':activePage) ? 'page' : 'false'); });
   if (activePage === 'good' || activePage === 'analyze') renderUpload(activePage === 'good');
   else if (activePage === 'session') renderSession();
-  else if (activePage === 'detection-check') cleanup=mountDetectionCheck(screen,{sessions:coachSessions,initialSessionId:practiceId,onBusy:v=>busy=v,onContext:id=>practiceId=id,openReview:id=>{practiceId=id;navigate('review');}});
+  else if (activePage === 'detection-check') cleanup=mountDetectionCheck(screen,{onMode:mode=>{document.querySelector('#page-title').textContent=mode==='full'?'全編チェック':'シュート検出チェック';},sessions:coachSessions,initialSessionId:practiceId,onBusy:v=>busy=v,onContext:id=>practiceId=id,openReview:id=>{practiceId=id;navigate('review');}});
   else if (activePage === 'review') renderReview();
   else if(activePage==='good-management')renderReview('good');
   else if (activePage === 'calibration') cleanup=mountPersonalCalibration(screen,{initialSessionId:practiceId,openPractice:()=>navigate('coach'),openWholeReview:id=>{practiceId=id;wholeReview=true;navigate('review');},openReview:id=>{practiceId=id??practiceId;navigate('review');},sessions:coachSessions,cases:collectCases(results,sessions,coachSessions,reviewData.cases),getFreshCases:async()=>{const saved=await getSetting('review-v04');return collectCases(results,sessions,coachSessions,saved?.value?.cases??reviewData.cases);}});

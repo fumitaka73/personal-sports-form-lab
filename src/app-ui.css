@@ -34,3 +34,45 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 @media(orientation:landscape) and (max-height:540px){.detection-stage{height:clamp(60px,calc(100dvh - 320px),140px)}.detection-workspace #detection-status{height:18px}.detection-workspace #detection-selected{margin:0}}
 
 @media(orientation:landscape) and (max-height:540px){.detection-workspace{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);column-gap:8px}.detection-workspace #detection-counts,.detection-workspace #detection-selected,.detection-workspace #detection-status{grid-column:1/-1}.detection-workspace #detection-player{grid-column:1;grid-row:3;min-width:0}.detection-workspace .detection-decisions{grid-column:2;grid-row:3;grid-template-columns:1fr;gap:4px;margin:0;align-self:start}.detection-workspace .detection-decisions button{min-height:44px;height:44px}.detection-workspace .detection-stage{height:clamp(80px,calc(100dvh - 270px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),180px)}}
+/* Full practice shares quick check's labels; only advanced controls scroll. */
+.detection-modes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.detection-modes button{min-height:44px}
+.detection-modes [aria-pressed=true]{background:var(--app-accent);color:white}
+.full-controls[hidden]{display:none}
+.full-track{background:repeating-linear-gradient(135deg,#47525f 0 5px,#26303b 5px 10px);border-radius:6px;position:relative;margin-top:5px}
+.full-coverage,.full-progress{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
+.full-coverage i,.full-progress i{position:absolute;top:2px;height:5px}
+.full-progress i{top:36px;height:5px}
+.full-track input{position:relative;display:block;width:100%;margin:0;min-height:44px;background:transparent}
+.full-time{display:flex;justify-content:space-between;font-size:12px;min-height:18px}
+.full-transport{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.full-transport button,.full-transport select{min-height:44px;margin:0;padding:4px;font-size:13px}
+.full-markers{position:relative;height:48px;margin:4px 0;background:#24333f;border-radius:6px}
+.full-markers button{position:absolute;left:clamp(0px,calc(var(--position) - 22px),calc(100% - 44px));min-width:44px;height:48px;padding:2px;font-size:14px;display:grid;place-items:center;border:1px solid currentColor}
+.full-markers small{font-size:10px}
+.full-markers [aria-pressed=true]{z-index:2;outline:2px solid white}
+.marker-detected{color:#a6d2ff;background:#16416a}.marker-candidate{color:#ffe39b;background:#5c4709}
+.marker-manual{color:#b3ffd1;background:#185233}.marker-rejected{color:#e6e7e9;background:#484b50}
+.full-main{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:4px}
+.full-main button{min-height:44px;margin:0;padding:4px;font-size:13px}
+.full-tools{font-size:12px}.full-tools summary{min-height:44px;display:flex;align-items:center}
+.full-tools button{min-height:44px}.full-tools p{font-size:12px;overflow-wrap:anywhere}
+#detection-full-details{margin-top:8px}
+/* html already reserves the header with scroll-padding. */
+.detection-workspace.full-mode{scroll-margin-top:0}
+.full-mode #detection-selected{margin:0}
+.full-mode .detection-stage{height:clamp(60px,calc(100dvh - 520px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),250px)}
+.full-mode .detection-decisions button{min-height:44px;height:44px;font-size:13px}
+.full-mode #detection-status{height:18px}
+/* Opening advanced tools should make their buttons reachable below the preview. */
+.detection-check:has(.full-tools[open]) .detection-workspace.full-mode{position:relative;top:auto}
+@media(orientation:landscape) and (max-height:540px){
+ .detection-workspace.full-mode{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto auto auto auto;column-gap:6px}
+ .full-mode #detection-counts{grid-row:1;grid-column:1/-1}
+ .full-mode #detection-selected{grid-row:2;grid-column:1/-1}
+ .full-mode #detection-player{grid-row:3;grid-column:1;align-self:start}
+ .full-mode #detection-full-host{grid-row:3;grid-column:2}
+ .full-mode .detection-decisions{grid-row:3;grid-column:1;align-self:end;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .full-mode #detection-status{grid-row:4;grid-column:1/-1}
+ .full-mode .detection-stage{height:clamp(60px,calc(100dvh - 270px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),160px)}
+}
