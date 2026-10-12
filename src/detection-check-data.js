@@ -12,7 +12,7 @@ export function timelineBounds(session,rows,pose){
  const ranges=rows.filter(r=>r.kind!=='shot-clip').map(r=>({start:r.start,end:r.end}));if(pose&&Number.isFinite(pose.origin)&&Number.isFinite(pose.end))ranges.push({start:pose.origin,end:pose.end});
  if(!ranges.length)return null;return {start:Math.min(...ranges.map(r=>r.start)),end:Math.max(...ranges.map(r=>r.end)),ranges};
 }
-export function validateTime(time,bounds){if(!Number.isFinite(time)||!bounds||time<bounds.start||time>bounds.end)throw new Error('保存された練習の範囲内で時刻を選んでください。');}
+export function validateTime(time,bounds){if(!Number.isFinite(time)||!bounds||time<bounds.start||time>bounds.end)throw new Error('保存された練習の範囲内で動画の位置を選んでください。');}
 export function duplicate(items,time,except){return items.find(i=>i.id!==except&&i.label!=='no'&&Math.abs(i.time-time)<DUPLICATE_SECONDS);}
 export function changeCheck(data,command,bounds,now=Date.now()){
  const d=structuredClone(data);if(command.type==='resume'){d.fullReview=fullProgress(d.fullReview,command.time,command.watched??[],bounds);d.revision++;return d;}const before={items:d.items,completedAt:d.completedAt,fullReview:d.fullReview};let after=structuredClone(before);
@@ -24,9 +24,9 @@ export function changeCheck(data,command,bounds,now=Date.now()){
   else if(command.type==='candidates'){
    for(const item of command.items){validateTime(item.time,bounds);if(!duplicate(after.items,item.time)&&!after.items.some(i=>i.id===item.id))after.items.push(structuredClone(item));}after.items.sort((a,b)=>a.time-b.time);
   }else if(command.type==='add'){
-   validateTime(command.time,bounds);if(duplicate(after.items,command.time))throw new Error('近い時刻に登録済みのシュート・候補があります。一覧で確認・時刻調整してください。');after.items.push({id:crypto.randomUUID(),kind:'manual',originalTime:null,time:command.time,label:'yes',confidence:'human',reasons:[command.videoEvidence===false?'時刻のみ、動画根拠なし':'本人が動画・姿勢から手動追加'],source:'touch',videoEvidence:command.videoEvidence??null});after.items.sort((a,b)=>a.time-b.time);after.completedAt=null;
+   validateTime(command.time,bounds);if(duplicate(after.items,command.time))throw new Error('近い動画の位置に登録済みのシュート・候補があります。一覧で確認・位置調整してください。');after.items.push({id:crypto.randomUUID(),kind:'manual',originalTime:null,time:command.time,label:'yes',confidence:'human',reasons:[command.videoEvidence===false?'位置のみ、動画根拠なし':'本人が動画・姿勢から手動追加'],source:'touch',videoEvidence:command.videoEvidence??null});after.items.sort((a,b)=>a.time-b.time);after.completedAt=null;
   }else if(command.type==='set'){
-   const item=after.items.find(i=>i.id===command.id);if(!item)throw new Error('確認対象がありません。');if(!['yes','no','later'].includes(command.label))throw new Error('正しい確認結果を選んでください。');const time=command.time??item.time;validateTime(time,bounds);if(command.label==='yes'&&duplicate(after.items,time,item.id))throw new Error('近い時刻のシュートと重複します。時刻を見直してください。');item.time=time;item.label=command.label;item.source='touch';item.reviewedAt=now;after.completedAt=null;
+   const item=after.items.find(i=>i.id===command.id);if(!item)throw new Error('確認対象がありません。');if(!['yes','no','later'].includes(command.label))throw new Error('正しい確認結果を選んでください。');const time=command.time??item.time;validateTime(time,bounds);if(command.label==='yes'&&duplicate(after.items,time,item.id))throw new Error('近い動画の位置のシュートと重複します。動画の位置を見直してください。');item.time=time;item.label=command.label;item.source='touch';item.reviewedAt=now;after.completedAt=null;
   }else throw new Error('未対応の操作です。');
   const ids=new Set([...before.items,...after.items].map(i=>i.id)),changes=[...ids].map(id=>({id,before:before.items.find(i=>i.id===id)??null,after:after.items.find(i=>i.id===id)??null})).filter(p=>JSON.stringify(p.before)!==JSON.stringify(p.after));if(!changes.length&&before.completedAt===after.completedAt&&JSON.stringify(before.fullReview)===JSON.stringify(after.fullReview))return d;const action={id:crypto.randomUUID(),type:command.type,at:now,changes,completedBefore:before.completedAt,completedAfter:after.completedAt,...(command.type==='confirm-range'?{fullBefore:before.fullReview??null,fullAfter:after.fullReview??null}: {})};d.history.push(action);d.past.push(action.id);d.future=[];
  }
