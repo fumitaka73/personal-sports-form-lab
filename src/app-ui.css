@@ -129,3 +129,13 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 @media(orientation:landscape) and (max-height:540px){.full-mode .detection-stage,.full-mode:has(.has-selection) .detection-stage{height:60px}.full-clock-lane{min-width:0}}
 
 .coach-hud #coach-safety{font-size:12px;line-height:1.5;margin:6px 0;overflow-wrap:anywhere}.coach-safety-debug{font-size:12px}.coach-safety-debug summary{min-height:44px}.coach-safety-debug pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto}
+
+/* Issue #31: one-tap review; keep status and actions visible on iPhone. */
+.detection-register{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 2px;border-radius:8px}
+.detection-register #detection-register-position,.detection-register #detection-save-confirm{flex-basis:100%;margin:2px 0;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.detection-register #detection-save-confirm{min-height:20px;font-weight:600;color:#23543b}
+.detection-register button{min-height:48px;min-width:0}
+.detection-register #detection-add-here{flex:2 1 190px}
+.detection-register #detection-next-position{flex:1 1 100px}
+.detection-workspace.full-mode .detection-register{display:none}
+.detection-stage{max-width:100%;box-sizing:border-box}
