@@ -10,9 +10,9 @@ export const safetyMessages={
  failure:{ja:'分析または保存を続けられません。安全のため練習を終了します',en:'Analysis or saving cannot continue. Ending practice safely.'}
 };
 export function evaluateSafety(s,c=SAFETY_DEFAULTS){
- const limits={...SAFETY_DEFAULTS,...c},rate=Math.max(234375,s.video?.rate??0),videoReserve=Math.max(8*MIB,rate*limits.segmentSeconds*2),poseReserve=Math.max(36000,(s.pose?.rate??3600)*10);
+ const limits={...SAFETY_DEFAULTS,...c},rate=Math.max(234375,s.video?.rate??0),videoReserve=Math.max(8*MIB,rate*limits.segmentSeconds*2),poseReserve=s.pose?Math.max(36000,(s.pose.rate??3600)*10):0;
  const videoLeft=limits.videoLimit-(s.video?.used??0),poseLeft=limits.poseLimit-(s.pose?.used??0),timeLeft=limits.maxSeconds-s.elapsed;
- const details={videoLeft,poseLeft,timeLeft,videoSeconds:Math.max(0,Math.min((limits.videoLimit*.8-(s.video?.used??0))/rate,(videoLeft-videoReserve)/rate-30)+limits.warningDelay),poseSeconds:Math.max(0,Math.min(timeLeft-60,(limits.poseLimit*.8-(s.pose?.used??0))/Math.max(3600,s.pose?.rate??0),(poseLeft-poseReserve)/Math.max(3600,s.pose?.rate??0)-30)+limits.warningDelay),videoReserve,poseReserve};
+ const details={videoLeft,poseLeft,timeLeft,videoSeconds:Math.max(0,Math.min((limits.videoLimit*.8-(s.video?.used??0))/rate,(videoLeft-videoReserve)/rate-30)+limits.warningDelay),poseSeconds:Math.max(0,(s.pose?Math.min(timeLeft-60,(limits.poseLimit*.8-(s.pose?.used??0))/Math.max(3600,s.pose?.rate??0),(poseLeft-poseReserve)/Math.max(3600,s.pose?.rate??0)-30):timeLeft-60)+limits.warningDelay),videoReserve,poseReserve};
  if(s.failure)return {level:'stop',reason:'failure',detail:s.failure,...details};
  if(s.video?.enabled&&(videoLeft<=videoReserve||s.video.used>=limits.videoLimit*.85))return {level:'stop',reason:'video',...details};
  if(s.pose&&(poseLeft<=poseReserve||s.pose.used>=limits.poseLimit*.85))return {level:'stop',reason:'pose',...details};

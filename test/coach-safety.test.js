@@ -10,3 +10,17 @@ test('huge chunk or save failure signals once and preserves already saved rows',
 test('pose finalization waits inflight and flushes buffered final frames; duplicate stop shares promise',async()=>{const rows=[],archive=new PoseArchive({session:{id:'p',origin:0},saveChunk:async row=>{await new Promise(r=>setTimeout(r,15));rows.push(row);},saveSession:async()=>{}});archive.add({time:0,landmarks:null});archive.add({time:.1,landmarks:null});assert.equal(archive.snapshot().used,360);const a=archive.stop(),b=archive.stop();assert.equal(a,b);const result=await a;assert.equal(rows.length,2);assert.equal(result.count,2);assert.equal(result.complete,true);});
 
 test('remaining time estimates early warning plus grace, rather than the hard capacity',()=>{const result=evaluateSafety(normal);assert.ok(result.videoSeconds<128*MIB/234375*.85);assert.equal(result.poseSeconds,3600-normal.elapsed-55);});
+
+test('a new session uses remaining budgets, not historic percentages; disabled archives do not stop analysis',()=>{
+ const remaining={videoLimit:25*MIB,poseLimit:6*MIB};
+ assert.equal(evaluateSafety(normal,remaining).level,'ok');
+ assert.equal(evaluateSafety({...normal,video:{enabled:true,used:11*MIB}},remaining).level,'warn');
+ assert.equal(evaluateSafety({...normal,video:{enabled:true,used:25*MIB*.8}},remaining).level,'stop');
+ assert.equal(evaluateSafety({...normal,video:{enabled:true,used:25*MIB*.85}},remaining).level,'stop');
+ assert.equal(evaluateSafety({...normal,video:{enabled:false,used:128*MIB},pose:null},remaining).level,'ok');
+ assert.equal(evaluateSafety({...normal,video:{enabled:false},pose:null},{poseLimit:0}).poseSeconds,3515);
+});
+test('recorder start failure does not leave finalization waiting forever',async()=>{
+ const old=globalThis.MediaRecorder;globalThis.MediaRecorder=class extends Recorder{start(){throw new DOMException('denied','NotAllowedError');}};
+ try{const rows=[],r=new TemporaryRecorder({save:async row=>rows.push(row)});assert.throws(()=>r.start({getVideoTracks:()=>[]},'new'),{name:'NotAllowedError'});const result=await r.stop();assert.equal(result.failed,true);assert.deepEqual(rows,[]);}finally{globalThis.MediaRecorder=old;}
+});

@@ -14,7 +14,7 @@ export function unpackChunks(chunks,origin){return [...iterateChunks(chunks,orig
 export function poseSize(bytes=0){return bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KiB`:`${(bytes/1048576).toFixed(2)} MiB`;}
 export class PoseArchive{
  constructor({session,remaining=POSE_BUDGET,saveChunk,saveSession,onStatus=()=>{},onFailure=()=>{}}){Object.assign(this,{session:{...session,schema:POSE_SCHEMA,origin:session.origin??performance.now()/1000,count:0,bytes:0,chunks:0,status:'recording',complete:false,maxFPS:20},remaining,saveChunk,saveSession,onStatus,onFailure,rows:[],last:-Infinity,queue:Promise.resolve(),pending:false,inFlightBytes:0,failed:false,stopped:false});}
- fail(reason){if(!this.failed)this.onFailure(reason);this.failed=true;this.session.failureReason=reason;this.onStatus(`姿勢保存: ${reason}。安全のため練習を終了します。`);}
+ fail(reason){if(!this.failed)this.onFailure(reason);this.failed=true;this.session.failureReason=reason;this.onStatus(`姿勢保存: ${reason}。姿勢時系列の保存を停止しました。`);}
  add(frame){
   if(this.stopped||this.failed||!Number.isFinite(frame.time)||frame.time<this.session.origin||frame.time-this.last<.049)return;
   if(frame.time-this.session.origin>3600||this.session.bytes+this.inFlightBytes+(this.rows.length+POSE_STRIDE)*4>this.remaining){this.fail('保存上限');return;}

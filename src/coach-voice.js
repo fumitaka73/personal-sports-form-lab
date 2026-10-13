@@ -5,7 +5,7 @@ export class CoachVoice{
  say(text){this.cancel();if(!this.available||!this.enabled||this.volume===0)return false;
   const utterance=new this.Utterance(text);utterance.lang=this.language==='ja'?'ja-JP':'en-US';utterance.volume=this.volume;utterance.rate=1.25;
   const voices=this.synthesis.getVoices?.()??[];utterance.voice=voices.find(v=>v.lang===utterance.lang)??voices.find(v=>v.lang.startsWith(this.language))??null;
-  utterance.onerror=event=>{if(!['interrupted','canceled'].includes(event.error))this.onError('音声を再生できませんでした。音声テストと端末の音量設定を確認してください。');};try{this.synthesis.speak(utterance);return true;}catch{this.onError('音声を再生できませんでした。画面の通知を確認してください。');return false;}
+  utterance.onerror=event=>{if(!['interrupted','canceled'].includes(event.error))this.onError('音声を再生できませんでした。「音声を確認」と端末の音量設定を確認してください。');};try{this.synthesis.resume?.();this.synthesis.speak(utterance);return true;}catch{this.onError('音声を再生できませんでした。画面の通知を確認してください。');return false;}
  }
  deliver(feedback){this.cancel();return feedback.speak?this.say(feedback.text[this.language]):false;}
  prime(){return this.say(this.language==='ja'?'開始します':'Ready');}

@@ -67,3 +67,8 @@ test('coach phrases identify specific timing and focus without vague rhythm or r
  assert.equal(selectCoachFeedback({...dip,overall:90,metrics:[metric('kneeAngle','lower',0)]},{focus:'dip'}).text.ja,'ディップちょうどいい');
  assert.equal(selectCoachFeedback({...dip,overall:90,metrics:[metric('wristHeight','release',0)]},{focus:'release'}).text.ja,'リリースいいです');
 });
+
+test('voice prime invokes speech synchronously and resumes a paused synthesis before first feedback',()=>{
+ let activation=true,primed=false;const calls=[],errors=[],synthesis={cancel(){},resume(){calls.push('resume');},speak(u){if(!primed&&!activation)throw new Error('requires tap');primed=true;calls.push(u.text);},getVoices(){return [];}},voice=new CoachVoice({synthesis,Utterance:class{constructor(text){this.text=text;}},onError:e=>errors.push(e)});
+ assert.equal(voice.prime(),true);assert.deepEqual(calls,['resume','開始します']);activation=false;assert.equal(voice.deliver(selectCoachFeedback(comparison())),true);assert.equal(calls.at(-1),'リリース低い');assert.deepEqual(errors,[]);
+});
