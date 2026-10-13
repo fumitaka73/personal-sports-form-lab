@@ -30,7 +30,9 @@ const final=await page.evaluate(async()=>{const s=await import('/src/storage.js'
 const truth=await page.evaluate(async()=>{
  const storage=await import('/src/storage.js'),{frames}=await import('/test-support/shot-frames.js'),{packFrame}=await import('/src/pose-archive.js'),{replayDetection,defaultParameters}=await import('/src/personal-calibration.js');const events={};
  for(const [i,id]of ['train-a','train-b','val-a','val-b'].entries()){
-  const origin=100+i*100,metadata={shotType:'jump',cameraAngle:'side',hand:'right'},series=Array.from({length:10},(_,j)=>frames().map(f=>{const landmarks=structuredClone(f.landmarks),x=Math.min(1,f.time);landmarks[16].y=.26-.18*x;landmarks[14].y=.35-.06*x;return {time:origin+j*3.2+f.time,landmarks,aspect:1};})).flat();
+  const origin=100+i*100,metadata={shotType:'jump',cameraAngle:'side',hand:'right'},series=Array.from({length:10},(_,j)=>frames().map(f=>{const landmarks=structuredClone(f.landmarks),x=Math.min(1,f.time);landmarks[16].y=.26-.18*x;
+  // Synthetic weak extension stays below 100 degrees even at the end.
+  const shoulder=landmarks[12],wrist=landmarks[16],dx=wrist.x-shoulder.x,dy=wrist.y-shoulder.y,d=Math.hypot(dx,dy),angle=x<.2?70:95,h=d/(2*Math.tan(angle*Math.PI/360));landmarks[14]={x:(shoulder.x+wrist.x)/2-dy/d*h,y:(shoulder.y+wrist.y)/2+dx/d*h,visibility:.99};return {time:origin+j*3.2+f.time,landmarks,aspect:1};})).flat();
   events[id]=replayDetection({metadata,frames:series},{...defaultParameters().detector,minExtension:5,minExtendedElbow:90}).map(e=>e.time-origin);
   const buffer=new Float32Array(series.flatMap(f=>packFrame(f,origin))).buffer;await storage.savePoseChunk({id:id+':000000',sessionId:id,index:0,buffer},{id,origin,end:series.at(-1).time,createdAt:100000+i*100000,metadata,goodFormId:'good',schema:'pose-trace-1',status:'complete',complete:true,count:series.length,bytes:buffer.byteLength,chunks:1,aspect:1});
  }return events;
