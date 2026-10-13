@@ -13,8 +13,8 @@ export function* iterateChunks(chunks,origin){for(const chunk of chunks){const a
 export function unpackChunks(chunks,origin){return [...iterateChunks(chunks,origin)];}
 export function poseSize(bytes=0){return bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KiB`:`${(bytes/1048576).toFixed(2)} MiB`;}
 export class PoseArchive{
- constructor({session,remaining=POSE_BUDGET,saveChunk,saveSession,onStatus=()=>{}}){Object.assign(this,{session:{...session,schema:POSE_SCHEMA,origin:session.origin??performance.now()/1000,count:0,bytes:0,chunks:0,status:'recording',complete:false,maxFPS:20},remaining,saveChunk,saveSession,onStatus,rows:[],last:-Infinity,queue:Promise.resolve(),pending:false,inFlightBytes:0,failed:false,stopped:false});}
- fail(reason){this.failed=true;this.session.failureReason=reason;this.onStatus(`姿勢保存: ${reason}。練習は継続します。`);}
+ constructor({session,remaining=POSE_BUDGET,saveChunk,saveSession,onStatus=()=>{},onFailure=()=>{}}){Object.assign(this,{session:{...session,schema:POSE_SCHEMA,origin:session.origin??performance.now()/1000,count:0,bytes:0,chunks:0,status:'recording',complete:false,maxFPS:20},remaining,saveChunk,saveSession,onStatus,onFailure,rows:[],last:-Infinity,queue:Promise.resolve(),pending:false,inFlightBytes:0,failed:false,stopped:false});}
+ fail(reason){if(!this.failed)this.onFailure(reason);this.failed=true;this.session.failureReason=reason;this.onStatus(`姿勢保存: ${reason}。安全のため練習を終了します。`);}
  add(frame){
   if(this.stopped||this.failed||!Number.isFinite(frame.time)||frame.time<this.session.origin||frame.time-this.last<.049)return;
   if(frame.time-this.session.origin>3600||this.session.bytes+this.inFlightBytes+(this.rows.length+POSE_STRIDE)*4>this.remaining){this.fail('保存上限');return;}
@@ -24,12 +24,14 @@ export class PoseArchive{
   if(this.rows.length>=POSE_STRIDE*100&&this.pending)this.fail('保存処理の遅延');
   else if(!this.pending&&(this.session.count===0||this.rows.length>=POSE_STRIDE*20||frame.time-this.session.origin-this.rows[0]>=1))this.flush();
  }
- flush(){
-  if(!this.rows.length||this.pending||this.failed)return this.queue;
+ flush(final=false){
+  if(!this.rows.length||this.pending||(this.failed&&!final))return this.queue;
   const buffer=new Float32Array(this.rows).buffer;this.rows=[];
   const index=this.session.chunks,snapshot={...this.session,count:this.session.count+buffer.byteLength/(POSE_STRIDE*4),bytes:this.session.bytes+buffer.byteLength,chunks:index+1};
   const chunk={id:`${this.session.id}:${String(index).padStart(6,'0')}`,sessionId:this.session.id,index,buffer};this.pending=true;this.inFlightBytes=buffer.byteLength;
   this.queue=this.queue.then(async()=>{await this.saveChunk(chunk,structuredClone(snapshot));Object.assign(this.session,{count:snapshot.count,bytes:snapshot.bytes,chunks:snapshot.chunks});this.onStatus(`姿勢保存中: ${poseSize(this.session.bytes)} · ${this.session.count}フレーム`);}).catch(error=>this.fail(error?.name==='QuotaExceededError'?'空き容量不足':`書き込み失敗 (${error?.name??'Error'})`)).finally(()=>{this.pending=false;this.inFlightBytes=0;});return this.queue;
  }
- async stop(){this.stopped=true;await this.queue;await this.flush();if(!this.session.count&&!this.failed)this.fail('フレーム未取得');this.session.complete=!this.failed;this.session.status=this.failed?'incomplete':'complete';try{await this.saveSession(structuredClone(this.session));}catch(error){this.session.complete=false;this.session.status='incomplete';this.fail(`終了記録の書き込み失敗 (${error?.name??'Error'})`);}this.onStatus(`姿勢 ${poseSize(this.session.bytes)} · ${this.session.count}フレーム · ${this.session.complete?'保存完了':`不完全: ${this.session.failureReason}（検出評価には使いません）`}`);return structuredClone(this.session);}
+ snapshot(){return {used:this.session.bytes+this.inFlightBytes+this.rows.length*4,unsavedBytes:this.inFlightBytes+this.rows.length*4,rate:3600,writtenBytes:this.session.bytes};}
+ stop(){if(!this.stopPromise)this.stopPromise=this.finalize();return this.stopPromise;}
+ async finalize(){this.stopped=true;await this.queue;await this.flush(true);if(!this.session.count&&!this.failed)this.fail('フレーム未取得');this.session.complete=!this.failed;this.session.status=this.failed?'incomplete':'complete';try{await this.saveSession(structuredClone(this.session));}catch(error){this.session.complete=false;this.session.status='incomplete';this.fail(`終了記録の書き込み失敗 (${error?.name??'Error'})`);}this.onStatus(`姿勢 ${poseSize(this.session.bytes)} · ${this.session.count}フレーム · ${this.session.complete?'保存完了':`不完全: ${this.session.failureReason}（検出評価には使いません）`}`);return structuredClone(this.session);}
 }
