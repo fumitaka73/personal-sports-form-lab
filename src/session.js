@@ -1,4 +1,4 @@
-export const SESSION_POSE_RULE_VERSION='session-pose-1';
+export const SESSION_POSE_RULE_VERSION='session-pose-1.1';
 import { shotCandidates, shotMotionRows } from './auto-phases.js';
 export const SESSION_POSE_THRESHOLDS=Object.freeze({prepHeight:.7,prepElbow:165,peakHeight:.15,minRise:.28,minExtendedElbow:100,minExtension:8,minStrength:.12});
 export function detectSessionShots(frames, hand, aspect, range, parameters=SESSION_POSE_THRESHOLDS) {
@@ -19,17 +19,19 @@ export function detectSessionShots(frames, hand, aspect, range, parameters=SESSI
       const rise=motion.slice(i).filter(r=>r.time<=release+0.8);
       const high=rise.filter(r=>r.time>=ready.time+0.15&&r.wristHeight>=thresholds.peakHeight&&r.wristHeight-ready.wristHeight>=thresholds.minRise);
       // At least two successive high frames: a single tracking jump is insufficient.
-      const peak=high.find((r,j)=>j&&r.time-high[j-1].time<=0.6);
+      // Hand rise can precede elbow extension. Inspect later high frames with
+      // the same evidence thresholds instead of rejecting at the first pair.
+      const supportsPose = peak => {
+        const bent=Number.isFinite(ready.elbow)&&ready.elbow<=thresholds.prepElbow;
+        const extended=Number.isFinite(peak.elbow)&&peak.elbow>=thresholds.minExtendedElbow&&peak.elbow-ready.elbow>=thresholds.minExtension;
+        if(bent&&extended)return true;
+        const missingElbow=!Number.isFinite(ready.elbow)||!Number.isFinite(peak.elbow);
+        return missingElbow&&peak.wristHeight-ready.wristHeight>=.5&&high.length>=3;
+      };
+      const peak=high.find((r,j)=>j&&r.time-high[j-1].time<=0.6&&(candidate.source!=='pose'||supportsPose(r)));
       if(!peak)continue;
       const ascent=rise.filter(r=>r.time<=peak.time);
       if(ascent.some((r,j)=>j&&r.time-ascent[j-1].time>0.65))continue;
-      const bent=Number.isFinite(ready.elbow)&&ready.elbow<=thresholds.prepElbow;
-      const extended=Number.isFinite(peak.elbow)&&peak.elbow>=thresholds.minExtendedElbow&&peak.elbow-ready.elbow>=thresholds.minExtension;
-      if(candidate.source==='pose'&&!(bent&&extended)){
-        // Occluded elbows need stronger, sustained wrist evidence instead.
-        const missingElbow=!Number.isFinite(ready.elbow)||!Number.isFinite(peak.elbow);
-        if(!missingElbow||peak.wristHeight-ready.wristHeight<.5||high.length<3)continue;
-      }
       best={readyTime:ready.time,peakTime:peak.time};break;
     }
     return best;

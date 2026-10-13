@@ -9,7 +9,10 @@ const metadata={shotType:'jump',cameraAngle:'side',hand:'right'};
 function dataset(weak=true){
  const cases=[],sessions=[];
  for(const [index,id]of ['train-a','train-b','val-a','val-b'].entries()){
-  const base=100+index*100,sFrames=Array.from({length:10},(_,shot)=>frames().map(f=>{const p=structuredClone(f.landmarks),x=Math.min(1,f.time);if(weak){p[16].y=.26-.18*x;p[14].y=.35-.06*x;}return {time:base+shot*3.2+f.time,landmarks:p,aspect:1};})).flat();
+  const base=100+index*100,sFrames=Array.from({length:10},(_,shot)=>frames().map(f=>{const p=structuredClone(f.landmarks),x=Math.min(1,f.time);if(weak){p[16].y=.26-.18*x;
+   // Keep the weak fixture below the default extension angle throughout,
+   // so calibration tests a real threshold change, not early-frame ordering.
+   const shoulder=p[12],wrist=p[16],dx=wrist.x-shoulder.x,dy=wrist.y-shoulder.y,d=Math.hypot(dx,dy),angle=x<.2?70:95,h=d/(2*Math.tan(angle*Math.PI/360));p[14]={x:(shoulder.x+wrist.x)/2-dy/d*h,y:(shoulder.y+wrist.y)/2+dx/d*h,visibility:.99};}return {time:base+shot*3.2+f.time,landmarks:p,aspect:1};})).flat();
   const session={id,origin:base,end:sFrames.at(-1).time,complete:true,metadata,aspect:1,frames:sFrames,split:index<2?'training':'validation'};
   const events=replayDetection(session,{...defaultParameters().detector,minExtension:5,minExtendedElbow:90});assert.equal(events.length,10);
   const group=events.map((e,j)=>({id:`live:${id}:${j+1}`,source:{mode:'live',recordId:id,shotNumber:j+1},metadata,analysis:{phases:e.phases},labels:{detection:'correct'},manualAdded:weak}));cases.push(...group);session.truth={confirmed:true,actualShots:10,events:events.map((e,j)=>({caseId:group[j].id,time:e.time})),reviewFingerprint:reviewFingerprint(group)};sessions.push(session);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { calculateMetrics } from '../src/metrics.js';
 import { detectSessionShots, summarizeSession } from '../src/session.js';
 import { reviewShot } from '../src/shot-engine.js';
+import {ShotDetector} from '../src/shot-detector.js';
 import { frames } from '../test-support/shot-frames.js';
 function sessionFrames(){
   return [0,4,8].flatMap((offset,track)=>frames().map((f,i)=>{
@@ -81,4 +82,26 @@ test('tracked ball departure is retained even with low/cropped shooting posture'
 test('a compact pose-only shooting arc is retained without demanding a very high wrist',()=>{
  const compact=frames().map(f=>{const p=structuredClone(f.landmarks),v=Math.min(1,f.time);p[12]={x:.5,y:.35,visibility:.99};p[24]={x:.5,y:.6,visibility:.99};p[14]={x:.55,y:.39-.08*v,visibility:.99};p[16]={x:.55+.03*v,y:.4-.12*v,visibility:.99};return {...f,landmarks:p};});
  assert.equal(detectSessionShots(compact,'right',1,{start:0,end:2}).length,1);
+});
+
+// Entirely synthetic geometry; no exported personal trace is used in this fixture.
+function delayedExtension(extend=true){
+ const base=frames()[0].landmarks;
+ return Array.from({length:61},(_,i)=>{const time=i/20,p=structuredClone(base),rise=Math.max(0,Math.min(1,(time-.5)/.5)),w={x:.61,y:.48-.3*rise,visibility:.99},s=p[12];
+ const angle=time<.5?100:extend&&time>=1.1?165:65,dx=w.x-s.x,dy=w.y-s.y,d=Math.hypot(dx,dy),h=d/(2*Math.tan(angle*Math.PI/360));
+ p[16]=w;p[14]={x:(s.x+w.x)/2-dy/d*h,y:(s.y+w.y)/2+dx/d*h,visibility:.99};return {time,landmarks:p};});
+}
+test('pose-only shot can extend after the first sustained raised-hand frames',()=>{
+ const trace=delayedExtension(),shots=detectSessionShots(trace,'right',1,{start:0,end:3});assert.equal(shots.length,1);assert.equal(shots[0].confidence,'Low');assert.ok(shots[0].phases.release>=1.1);
+});
+test('raised hand without subsequent elbow extension remains rejected',()=>{
+ assert.equal(detectSessionShots(delayedExtension(false),'right',1,{start:0,end:3}).length,0);
+});
+
+test('live adapter detects delayed extension once and retains nonshooting rejection',()=>{
+ for(const extend of [true,false]){
+  const detector=new ShotDetector({live:true}),events=[];
+  for(const f of delayedExtension(extend))events.push(...detector.processFrame(f.time*1000,f.landmarks).events);
+  assert.equal(events.length,extend?1:0);if(extend)assert.ok(events[0].phases.release>=1.1);
+ }
 });
