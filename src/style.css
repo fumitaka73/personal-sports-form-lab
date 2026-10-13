@@ -48,3 +48,15 @@ header{padding-top:calc(12px + env(safe-area-inset-top))}
 .coach-workspace .live-stage.hoop-selecting{touch-action:none;outline:2px solid #15849a}
 @media(max-width:900px){main{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}.coach-workspace .live-panel .sync-controls button{white-space:nowrap}.coach-workspace .live-stage video{background:#16261e}.coach-workspace .coach-actions button{padding:10px 6px}}
 .app-version{font-size:13px;font-weight:700;color:#294638;white-space:nowrap;margin-left:8px;letter-spacing:0}header .brand{letter-spacing:.5px;gap:6px}header .header-label{margin-left:auto}.good-thumbnail-placeholder{display:inline-block;font-size:12px;margin:0 12px 12px 0;color:#52634f}.good-thumbnail-placeholder canvas{display:block;border-radius:6px}.ai-next{padding:10px;border-left:3px solid #294638;background:#eef3e9}#ai-basic>details{margin:12px 0}#ai-basic>button{margin:4px;min-height:44px}#ai-basic summary{min-height:44px;display:flex;align-items:center}#ai-basic .progress-card{padding:8px;margin:8px 0}#ai-basic .progress-card p{margin:5px 0}@media(max-width:430px){header .brand{font-size:11px}header .brand-mark{width:28px;height:28px}header{gap:4px}.app-version{margin-left:4px}}
+/* Match the stage to the uncropped camera image, including its overlays. */
+.coach-workspace .live-stage{max-width:100%;margin-inline:auto}
+.coach-workspace .live-stage video,.is-coaching .coach-workspace .live-stage video{display:block;width:100%;height:auto!important;max-height:none;aspect-ratio:auto!important}
+.coach-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.coach-actions #coach-voice-test{grid-column:auto}.coach-actions button{font-size:13px;min-height:44px}
+.practice-notice{padding:12px;border:2px solid #b65a24;border-radius:12px;background:#fff4df;color:#402d18;margin-bottom:10px}
+.practice-notice[hidden]{display:none}
+.practice-notice button{margin:4px 4px 0 0;min-height:44px}
+#practice-capacity,#practice-mode{font-size:12px;overflow-wrap:anywhere;margin:8px 0}
+#practice-mode{font-weight:700}
+@media(orientation:landscape) and (max-height:600px){.coach-actions{grid-template-columns:1fr 1fr 1fr}.coach-actions #coach-voice-test{grid-column:auto}.coach-hud #practice-voice{font-size:11px}}
+
+.is-coaching #practice-capacity,.is-coaching #practice-voice:not([data-show]){display:none}

@@ -41,9 +41,19 @@ export function mountLivePose(container,options={}){
   const old=engine,pending=sendPromise;engine=null;
   if(old){await pending?.catch(()=>{});await old.close().catch(()=>{});}
  }
+ function fitPreview(){
+  if(!options.fitPreview||!video.videoWidth||!video.videoHeight)return;
+  const available=video.parentElement.parentElement.clientWidth;
+  const landscape=window.innerWidth>window.innerHeight,coaching=!!container.closest('.is-coaching');
+  const fraction=landscape ? .43 : coaching ? .24 : .36;
+  const cap=Math.max(140,Math.min(420,(window.visualViewport?.height??window.innerHeight)*fraction));
+  const width=Math.min(available,cap*video.videoWidth/video.videoHeight),value=`${Math.floor(width)}px`;
+  if(video.parentElement.style.width!==value)video.parentElement.style.width=value;
+ }
+
  function loop(now,id){
   if(!running||id!==token||disposed)return;
-  const aspect=video.videoWidth/video.videoHeight;
+  fitPreview();const aspect=video.videoWidth/video.videoHeight;
   const ratio=`${video.videoWidth} / ${video.videoHeight}`;
   if(video.videoWidth&&video.style.aspectRatio!==ratio)video.style.aspectRatio=ratio;
   if(sourceSize!==`${video.videoWidth}:${video.videoHeight}`){resetGeometry();if(detector)detector.aspect=aspect;}
@@ -57,7 +67,7 @@ export function mountLivePose(container,options={}){
    const started=performance.now();sendPromise=engine.send({image:input},now).then(()=>{
     if(id!==token)return;const elapsed=performance.now()-started;options.onPerformance?.({time:performance.now()/1000,durationMs:elapsed});durations.push(elapsed);durations=durations.slice(-30);
     if(durations.length===30&&durations.reduce((a,b)=>a+b,0)/30>65&&edge>320){edge=edge===480?384:320;durations=[];}
-   }).catch(error=>{if(id===token){options.onFailure?.('inference-error');text('live-status',`姿勢推定を実行できませんでした。SafariのWebGL設定・端末の空きメモリを確認してください。${error.message??''}`);void stop(false);}}).finally(()=>{sendPromise=null;});
+   }).catch(error=>{if(id===token){options.onFailure?.('inference-error',error);text('live-status',`姿勢推定を実行できませんでした。SafariのWebGL設定・端末の空きメモリを確認してください。${error.message??''}`);void stop(false);}}).finally(()=>{sendPromise=null;});
   }
   raf=requestAnimationFrame(time=>loop(time,id));
  }
@@ -84,7 +94,7 @@ export function mountLivePose(container,options={}){
    if(disposed||id!==token){await localEngine.close().catch(()=>{});return;}
    engine=localEngine;
    edge=480;cameraSamples=[];cameraCounter=0;poseTimes=[];durations=[];lastInference=-Infinity;lastVideoTime=-1;lastCameraTime=-1;lastPoseAt=-Infinity;resetDetector();resetGeometry();running=true;options.onStart?.();updateButtons();text('live-status','カメラ動作中・端末内処理');watchCamera(id);raf=requestAnimationFrame(time=>loop(time,id));
-  }catch(error){if(id===token&&!disposed){await stop(false);text('live-status',cameraErrorMessage(error));}}
+  }catch(error){if(id===token&&!disposed){await stop(false);const message=cameraErrorMessage(error);text('live-status',message);options.onCameraError?.(message,error);}}
  }
  el('live-ball-enable').onchange=event=>{objects.enabled=event.target.checked;objects.reset(video.videoWidth/video.videoHeight||1);};
  el('live-hoop-scan').onclick=()=>{if(!running)return;hoop=null;hoopCandidate=null;el('live-hoop-confirm').disabled=true;hoopScan.reset(performance.now());text('live-hoop-status','Hoop候補を検索中…');};el('live-hoop-confirm').onclick=()=>{if(!hoopCandidate)return;hoop={...hoopCandidate,confirmed:true};hoopCandidate=null;hoopScan.confirm();el('live-hoop-confirm').disabled=true;text('live-hoop-status','Hoop確定済み（位置指定・成功判定なし）');};
