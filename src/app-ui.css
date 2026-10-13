@@ -167,8 +167,12 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 @media (orientation:portrait){
  .detection-check .detection-workspace,
  .detection-check .detection-workspace.full-mode{position:relative;top:auto;overflow:visible;max-height:none}
- .detection-check .detection-stage{max-height:32svh;min-height:0}
+ .detection-check .detection-stage{max-height:none;min-height:0}
  .detection-check .full-clock-lane{max-width:100%;min-width:0}
  .detection-check .quick-playback,.detection-check .detection-register{position:relative;z-index:2}
  .detection-check .quick-transport button{font-size:13px;min-height:44px}
 }
+
+.quick-seek-row,.full-overview-row{display:grid;grid-template-columns:44px minmax(0,1fr);gap:3px;align-items:center;min-width:0}
+.quick-seek-row button,.full-overview-row button{min-height:44px;min-width:44px;padding:3px;margin:0;font-size:12px}
+.detection-primary-guide{font-size:12px;line-height:1.5;margin:6px 0;padding:8px}.detection-mode-purpose{font-size:12px;line-height:1.5;margin:6px 0}
