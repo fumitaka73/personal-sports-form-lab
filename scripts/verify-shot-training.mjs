@@ -1,0 +1,6 @@
+import {readFile} from 'node:fs/promises';import {readTraining} from '../src/detection-training.js';import {scanCandidates} from '../src/detection-candidates.js';import {ShotDetector} from '../src/shot-detector.js';
+const file=process.argv[2];if(!file)throw new Error('使い方: node scripts/verify-shot-training.mjs dataset.json');
+const d=readTraining(await readFile(file,'utf8')),events=[];let previous=null,detector=null;
+for(const frame of d.frames){if(!detector||previous===null||frame.time-previous>.25||frame.time<=previous)detector=new ShotDetector({live:true,hand:d.session.metadata?.hand??'right',aspect:frame.aspect,parameters:d.session.detectorParameters??undefined});events.push(...detector.processFrame(frame.time*1000,frame.landmarks).events);previous=frame.time;}
+const candidates=scanCandidates(d.frames,{metadata:d.session.metadata,shots:d.session.originalDetection?.map(s=>({detectorEvent:s.event,analysis:{phases:s.phases}}))??[]});
+console.log(JSON.stringify({sessionId:d.session.id,frames:d.frames.length,partial:!d.complete,labels:d.labels,recordedLive:d.session.originalDetection?.length??0,replayedCurrentDetector:events.map(e=>e.phases),explorationCandidates:candidates.items.map(i=>({time:i.time,evidence:i.evidence})),note:'現在の検出器でのオフライン再生です。ライブの可視性・TrackingRecovery・取得fps・World座標は完全再現しません。局所ラベルのため全練習のRecallや正答率は計算しません。'},null,2));
