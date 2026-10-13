@@ -326,3 +326,5 @@ Live Coachの軽量姿勢時系列を動画と独立して保存し、人間の�
 - [v0.21.2 詳細時間軸・iPhone操作手順](docs/issue-26-scroll-timeline.md)
 
 - [v0.21.3 練習の容量通知・安全終了](docs/issue-28-safe-coach.md)
+
+- [v0.21.4 連続手動登録・検証JSONの使い方](docs/issue-31-manual-review.md)

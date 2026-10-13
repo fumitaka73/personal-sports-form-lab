@@ -129,3 +129,34 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 @media(orientation:landscape) and (max-height:540px){.full-mode .detection-stage,.full-mode:has(.has-selection) .detection-stage{height:60px}.full-clock-lane{min-width:0}}
 
 .coach-hud #coach-safety{font-size:12px;line-height:1.5;margin:6px 0;overflow-wrap:anywhere}.coach-safety-debug{font-size:12px}.coach-safety-debug summary{min-height:44px}.coach-safety-debug pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto}
+
+/* Issue #31: one-tap review; keep status and actions visible on iPhone. */
+.detection-register{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 2px;border-radius:8px}
+.detection-register #detection-register-position,.detection-register #detection-save-confirm{flex-basis:100%;margin:2px 0;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.detection-register #detection-save-confirm{min-height:20px;font-weight:600;color:#23543b}
+.detection-register button{min-height:48px;min-width:0}
+.detection-register #detection-add-here{flex:2 1 190px}
+.detection-register #detection-next-position{flex:1 1 100px}
+.detection-workspace.full-mode .detection-register{display:none}
+.detection-stage{max-width:100%;box-sizing:border-box}
+
+/* Issue31: one primary registration action per mode, shared permanent save receipt. */
+.quick-playback{min-width:0}.quick-playback[hidden],.detection-register[hidden]{display:none!important}
+#quick-seek{width:100%;min-height:44px;margin:0}.quick-transport{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}.quick-transport button{min-width:44px;min-height:44px;padding:4px;font-size:12px}
+#detection-save-confirm{font-size:12px;line-height:18px;height:36px;margin:3px 0;overflow:auto;overflow-wrap:anywhere;font-weight:600}
+.detection-register{padding:0;gap:3px}.detection-register button{min-height:44px;font-size:13px}.detection-register #detection-register-position{font-size:11px;line-height:18px}
+#detection-next-position{display:none} /* +10 is in the common playback transport. */
+.full-main{grid-template-columns:minmax(0,3fr) minmax(66px,1fr)}.full-main #full-add{grid-row:1;grid-column:1;font-size:13px}.full-main #full-undo{grid-row:1;grid-column:2}.full-main .detection-decisions{grid-row:2;grid-column:1/-1}
+#full-selection{line-height:18px}.full-legend-line{line-height:13px;margin:1px 0}.full-tools #full-adjust,.full-tools #full-clear,.full-tools #full-unreviewed{min-height:44px;margin:4px 2px}
+.detection-workspace:not(.full-mode) .detection-decisions[hidden]{display:none}
+@media(orientation:landscape) and (max-height:540px){
+ .detection-workspace:not(.full-mode){grid-template-rows:auto auto auto auto auto;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+ .detection-workspace:not(.full-mode) #detection-player{grid-row:2/5;grid-column:1}
+ .detection-workspace:not(.full-mode) #detection-counts,.detection-workspace:not(.full-mode) #detection-selected{grid-column:1/-1;grid-row:1}
+ .detection-workspace:not(.full-mode) #detection-counts{display:none}
+ .quick-playback{grid-column:2;grid-row:2}.detection-register{grid-column:2;grid-row:3}.detection-workspace:not(.full-mode) .detection-decisions{grid-column:2;grid-row:4;grid-template-columns:repeat(3,minmax(0,1fr))}
+ #detection-save-confirm{grid-column:1/-1;grid-row:5}.detection-workspace #detection-status{grid-row:6}
+ .full-mode #detection-save-confirm{grid-column:1/-1;grid-row:2}.full-mode #detection-status{grid-row:3}
+}
+@media(orientation:landscape) and (max-height:540px){.detection-register #detection-register-position{display:none}.detection-register{gap:0}.detection-workspace #detection-status{margin:0}.detection-workspace #detection-save-confirm{margin:0}.detection-workspace #detection-selected{margin:0}}
+.detection-workspace{scroll-margin-top:0} /* header is already reserved by html scroll-padding */
