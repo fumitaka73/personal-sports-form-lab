@@ -9,7 +9,7 @@ export function clipRange(phases,origin=0,before=.75,after=.75){return {start:Ma
 export function intersects(segment,range){return segment.start<range.end&&segment.end>range.start;}
 export function mayExpire(segment,now=Date.now()){return !segment.keep&&segment.expiresAt<=now;}
 export class TemporaryRecorder{
- constructor({save,onStatus=()=>{},limit=VIDEO_LIMIT}){this.save=save;this.onStatus=onStatus;this.limit=limit;this.bytes=0;this.queue=Promise.resolve();this.stopped=true;this.index=0;this.failed=false;}
+ constructor({save,onStatus=()=>{},onFailure=()=>{},onProgress=()=>{},limit=VIDEO_LIMIT}){this.onProgress=onProgress;this.onFailure=onFailure;this.save=save;this.writtenBytes=0;this.pendingBytes=0;this.rate=234375;this.onStatus=onStatus;this.limit=limit;this.bytes=0;this.queue=Promise.resolve();this.stopped=true;this.index=0;this.failed=false;}
  start(stream,sessionId){
   const mime=supportedMime();if(mime===null)throw new Error('録画非対応です。フォーム分析は利用できます。');
   this.stream=stream;this.sessionId=sessionId;this.mime=mime;this.stopped=false;this.origin=performance.now()/1000;this.segment();
@@ -17,19 +17,21 @@ export class TemporaryRecorder{
  segment(){
   if(this.stopped)return;
   const recorder=new MediaRecorder(this.stream,{...(this.mime?{mimeType:this.mime}:{}),videoBitsPerSecond:1500000});this.recorder=recorder;
-  const start=performance.now()/1000,parts=[];let pendingBytes=0;
-  recorder.ondataavailable=e=>{if(e.data.size){parts.push(e.data);pendingBytes+=e.data.size;if(this.bytes+pendingBytes>=this.limit){this.failed=true;this.stopped=true;this.onStatus('容量上限に到達。録画を停止しました。保存済み動画は保持します。');if(recorder.state!=='inactive')recorder.stop();}}};
-  recorder.onerror=()=>{this.failed=true;this.stopped=true;this.onStatus('録画が中断されました。保存済み区間はレビューできます。');};
+  const start=performance.now()/1000,parts=[];this.segmentStart=start;this.lastDataAt=start;this.pendingBytes=0;this.segmentDone=new Promise(resolve=>this.resolveSegment=resolve);
+  recorder.ondataavailable=e=>{if(e.data.size){parts.push(e.data);this.pendingBytes+=e.data.size;const now=performance.now()/1000;this.rate=Math.max(234375,this.rate*.7+e.data.size/Math.max(.1,now-this.lastDataAt)*.3);this.lastDataAt=now;this.onProgress(this.snapshot(now));if(this.bytes+this.pendingBytes>=this.limit){this.failed=true;this.stopped=true;this.onFailure('video-limit');this.onStatus('容量上限に到達。録画を停止しました。保存済み動画は保持します。');if(recorder.state!=='inactive')recorder.stop();}}};
+  recorder.onerror=()=>{this.failed=true;this.stopped=true;this.onFailure('video-error');if(recorder.state!=='inactive')recorder.stop();this.onStatus('録画が中断されました。保存済み区間はレビューできます。');};
   recorder.onstop=()=>{
-   clearTimeout(this.timer);const end=performance.now()/1000;this.end=end;const blob=new Blob(parts,{type:recorder.mimeType||this.mime});
-   if(blob.size){this.bytes+=blob.size;const row={id:`${this.sessionId}:${this.index++}`,sessionId:this.sessionId,start,end,blob,bytes:blob.size,keep:false,camera:this.stream.getVideoTracks()[0]?.getSettings?.()??{},createdAt:Date.now(),expiresAt:Date.now()+RETENTION_MS};
-    this.queue=this.queue.then(()=>this.save(row)).then(()=>{this.onStatus(`${this.stopped?'録画停止':'● 録画中'} · ${(this.bytes/1048576).toFixed(1)} / ${(this.limit/1048576).toFixed(0)} MB · この端末のみ`);if(!this.stopped)this.segment();}).catch(()=>{this.failed=true;this.stopped=true;if(this.recorder.state!=='inactive')this.recorder.stop();this.onStatus('動画の保存に失敗（空き容量不足など）。保存済み区間だけ利用できます。');});
+   clearTimeout(this.timer);this.queuedAt=performance.now()/1000;const end=performance.now()/1000;this.end=end;const blob=new Blob(parts,{type:recorder.mimeType||this.mime});
+   this.pendingBytes=0;const resolve=this.resolveSegment;if(blob.size){this.bytes+=blob.size;const row={id:`${this.sessionId}:${this.index++}`,sessionId:this.sessionId,start,end,blob,bytes:blob.size,keep:false,camera:this.stream.getVideoTracks()[0]?.getSettings?.()??{},createdAt:Date.now(),expiresAt:Date.now()+RETENTION_MS};
+    this.queue=this.queue.then(()=>this.save(row)).then(()=>{this.writtenBytes+=blob.size;this.onStatus(`${this.stopped?'録画停止':'● 録画中'} · ${(this.bytes/1048576).toFixed(1)} / ${(this.limit/1048576).toFixed(0)} MB · この端末のみ`);if(!this.stopped)this.segment();}).catch(()=>{this.failed=true;this.stopped=true;if(this.recorder.state!=='inactive')this.recorder.stop();this.onFailure('video-save');this.onStatus('動画の保存に失敗（空き容量不足など）。保存済み区間だけ利用できます。');});
    }
-   if(!blob.size&&!this.stopped)this.segment();
+   resolve?.();if(!blob.size&&!this.stopped)this.segment();
   };
   recorder.start(1000);this.onStatus('● 録画中 · この端末のみ');this.timer=setTimeout(()=>{if(recorder.state!=='inactive')recorder.stop();},15000);
  }
- async stop(){this.stopped=true;clearTimeout(this.timer);const r=this.recorder;if(r&&r.state!=='inactive')await new Promise(resolve=>{r.addEventListener('stop',resolve,{once:true});r.stop();});await this.queue;return {failed:this.failed,end:this.end};}
+ snapshot(now=performance.now()/1000){const unreceived=this.recorder?.state!=='recording'?0:Math.max(0,now-(this.lastDataAt??now))*this.rate;return {used:this.bytes+this.pendingBytes+unreceived,unsavedBytes:this.bytes-this.writtenBytes+this.pendingBytes+unreceived,rate:this.rate,saveWait:this.bytes>this.writtenBytes&&this.recorder?.state==='inactive'?now-(this.queuedAt??now):0,writtenBytes:this.writtenBytes};}
+ stop(){if(this.stopPromise)return this.stopPromise;this.stopped=true;clearTimeout(this.timer);this.stopPromise=(async()=>{const r=this.recorder;if(r&&r.state!=='inactive')r.stop();await this.segmentDone;await this.queue;return {failed:this.failed,end:this.end};})();return this.stopPromise;}
+
 }
 // New clips use short margins and release-midpoint boundaries. Originals stay intact.
 export function singleShotRanges(shots,origin=0,end=Infinity){

@@ -55,9 +55,9 @@ export function mountLivePose(container,options={}){
   if(!sendPromise&&now-lastInference>=interval&&video.readyState>=2&&video.currentTime!==lastVideoTime){
    lastInference=now;lastVideoTime=video.currentTime;const scale=Math.min(1,edge/Math.max(video.videoWidth,video.videoHeight));const iw=Math.max(1,Math.round(video.videoWidth*scale)),ih=Math.max(1,Math.round(video.videoHeight*scale));if(input.width!==iw||input.height!==ih){input.width=iw;input.height=ih;}context.drawImage(video,0,0,input.width,input.height);inputEpoch=geometryEpoch;
    const started=performance.now();sendPromise=engine.send({image:input},now).then(()=>{
-    if(id!==token)return;const elapsed=performance.now()-started;durations.push(elapsed);durations=durations.slice(-30);
+    if(id!==token)return;const elapsed=performance.now()-started;options.onPerformance?.({time:performance.now()/1000,durationMs:elapsed});durations.push(elapsed);durations=durations.slice(-30);
     if(durations.length===30&&durations.reduce((a,b)=>a+b,0)/30>65&&edge>320){edge=edge===480?384:320;durations=[];}
-   }).catch(error=>{if(id===token){text('live-status',`姿勢推定を実行できませんでした。SafariのWebGL設定・端末の空きメモリを確認してください。${error.message??''}`);void stop(false);}}).finally(()=>{sendPromise=null;});
+   }).catch(error=>{if(id===token){options.onFailure?.('inference-error');text('live-status',`姿勢推定を実行できませんでした。SafariのWebGL設定・端末の空きメモリを確認してください。${error.message??''}`);void stop(false);}}).finally(()=>{sendPromise=null;});
   }
   raf=requestAnimationFrame(time=>loop(time,id));
  }
@@ -97,5 +97,5 @@ export function mountLivePose(container,options={}){
  el('live-debug').onchange=event=>{el('live-detector').hidden=!event.target.checked;if(!options.shouldDetect?.())resetDetector();};el('live-hand').onchange=()=>resetDetector();
  const hidden=()=>{if(document.hidden)void stop();};const leaving=()=>void stop(false);document.addEventListener('visibilitychange',hidden);window.addEventListener('pagehide',leaving);
  const dispose=()=>{disposed=true;window.removeEventListener('orientationchange',rotate);document.removeEventListener('visibilitychange',hidden);window.removeEventListener('pagehide',leaving);void stop(false);};
- dispose.getHoop=()=>hoop;dispose.getStream=()=>stream;dispose.isRunning=()=>running;dispose.resetDetector=resetDetector;dispose.setHand=hand=>{el('live-hand').value=hand;el('live-hand').disabled=!!options.shouldDetect?.();resetDetector();};return dispose;
+ dispose.stop=()=>stop(false);dispose.getHoop=()=>hoop;dispose.getStream=()=>stream;dispose.isRunning=()=>running;dispose.resetDetector=resetDetector;dispose.setHand=hand=>{el('live-hand').value=hand;el('live-hand').disabled=!!options.shouldDetect?.();resetDetector();};return dispose;
 }

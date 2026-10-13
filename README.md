@@ -324,3 +324,5 @@ Live Coachの軽量姿勢時系列を動画と独立して保存し、人間の�
 密集マーカーの選択、動画を見ながらの判定・位置修正（v0.21.1）は、[シュート確認の操作改善ガイド](docs/issue-24-review-workspace.md)を参照してください。
 
 - [v0.21.2 詳細時間軸・iPhone操作手順](docs/issue-26-scroll-timeline.md)
+
+- [v0.21.3 練習の容量通知・安全終了](docs/issue-28-safe-coach.md)

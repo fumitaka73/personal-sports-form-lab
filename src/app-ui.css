@@ -127,3 +127,5 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 .full-mode .detection-stage{height:clamp(48px,calc(100dvh - 626px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),220px)}
 .full-mode:has(.has-selection) .detection-stage{height:clamp(48px,calc(100dvh - 670px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),220px)}
 @media(orientation:landscape) and (max-height:540px){.full-mode .detection-stage,.full-mode:has(.has-selection) .detection-stage{height:60px}.full-clock-lane{min-width:0}}
+
+.coach-hud #coach-safety{font-size:12px;line-height:1.5;margin:6px 0;overflow-wrap:anywhere}.coach-safety-debug{font-size:12px}.coach-safety-debug summary{min-height:44px}.coach-safety-debug pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto}
