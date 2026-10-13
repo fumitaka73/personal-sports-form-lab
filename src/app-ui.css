@@ -160,3 +160,15 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 }
 @media(orientation:landscape) and (max-height:540px){.detection-register #detection-register-position{display:none}.detection-register{gap:0}.detection-workspace #detection-status{margin:0}.detection-workspace #detection-save-confirm{margin:0}.detection-workspace #detection-selected{margin:0}}
 .detection-workspace{scroll-margin-top:0} /* header is already reserved by html scroll-padding */
+
+/* Issue #33: in portrait, permit the document to scroll past video and reach the controls. */
+.detection-primary-guide{font-size:13px;line-height:1.55;margin:8px 0;padding:10px 12px;background:#f2f6ee;border-radius:8px}
+.detection-primary-guide strong{font-weight:700}
+@media (orientation:portrait){
+ .detection-check .detection-workspace,
+ .detection-check .detection-workspace.full-mode{position:relative;top:auto;overflow:visible;max-height:none}
+ .detection-check .detection-stage{max-height:32svh;min-height:0}
+ .detection-check .full-clock-lane{max-width:100%;min-width:0}
+ .detection-check .quick-playback,.detection-check .detection-register{position:relative;z-index:2}
+ .detection-check .quick-transport button{font-size:13px;min-height:44px}
+}
