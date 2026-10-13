@@ -328,3 +328,5 @@ Live Coachの軽量姿勢時系列を動画と独立して保存し、人間の�
 - [v0.21.3 練習の容量通知・安全終了](docs/issue-28-safe-coach.md)
 
 - [v0.21.4 連続手動登録・検証JSONの使い方](docs/issue-31-manual-review.md)
+
+- [v0.21.5 リリース登録・先頭再生・±3秒の操作](docs/issue-33-release-review.md)

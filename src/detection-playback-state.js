@@ -1,0 +1,3 @@
+// Snap only a tiny leading timestamp discrepancy; never bridge real missing footage.
+export function segmentAt(rows,time,tolerance=.05){return rows.find(r=>r.start<=time&&Math.min(r.decodedEnd??r.end,r.end)>time)??(rows[0]&&time<rows[0].start&&rows[0].start-time<=tolerance?rows[0]:null);}
+export function playbackAction({loading,playing,failed,current,rows}){if(loading)return {enabled:false,label:'読み込み中…'};if(playing)return {enabled:true,label:'一時停止'};if(!rows.length)return {enabled:false,label:'映像なし'};if(failed)return {enabled:true,label:'再試行'};if(current!==null&&current>=rows.at(-1).end-.04)return {enabled:true,label:'最初から再生'};if(current===null||segmentAt(rows,current))return {enabled:true,label:'再生'};return {enabled:rows.some(r=>r.start>=current),label:'次の映像から再生'};}
