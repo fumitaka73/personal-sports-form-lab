@@ -105,3 +105,50 @@ test('live adapter detects delayed extension once and retains nonshooting reject
   assert.equal(events.length,extend?1:0);if(extend)assert.ok(events[0].phases.release>=1.1);
  }
 });
+
+function liveEvents(trace){
+ const detector=new ShotDetector({live:true}),events=[];
+ for(const f of trace)events.push(...detector.processFrame(f.time*1000,f.landmarks,f.ball).events);
+ return events;
+}
+function setElbowAngle(p,angle){
+ const s=p[12],w=p[16],dx=w.x-s.x,dy=w.y-s.y,d=Math.hypot(dx,dy),h=d/(2*Math.tan(angle*Math.PI/360));
+ p[14]={x:(s.x+w.x)/2-dy/d*h,y:(s.y+w.y)/2+dx/d*h,visibility:.99};
+}
+test('already straight arm raising and ball-held horizontal extension stay rejected',()=>{
+ const armRaise=delayedExtension().map(f=>{const p=structuredClone(f.landmarks);setElbowAngle(p,170);return {...f,landmarks:p};});
+ const chestPass=delayedExtension().map(f=>{const p=structuredClone(f.landmarks),v=Math.max(0,Math.min(1,(f.time-.5)/.6));p[16]={x:.61+.2*v,y:.43,visibility:.99};setElbowAngle(p,80+85*v);return {...f,landmarks:p};});
+ const held=chestPass.map(f=>({...f,ball:{...f.landmarks[16],radius:.025,confidence:.9,trackId:1}}));
+ for(const trace of [armRaise,chestPass,held]){
+  assert.equal(detectSessionShots(trace,'right',1,{start:0,end:3}).length,0);
+  assert.equal(liveEvents(trace).length,0);
+ }
+});
+test('delayed extension with long raised follow-through is counted once offline and live',()=>{
+ const trace=delayedExtension();for(let i=61;i<=160;i++){const p=structuredClone(trace.at(-1).landmarks);p[16].y=.18+.015*Math.sin(i*.5);setElbowAngle(p,165);trace.push({time:i/20,landmarks:p});}
+ assert.equal(detectSessionShots(trace,'right',1,{start:0,end:8}).length,1);assert.equal(liveEvents(trace).length,1);
+});
+test('live tracking interruption cannot connect preparation to a later raised arm',()=>{
+ for(const mode of ['missing','low-visibility','time-gap']){
+  const interrupted=delayedExtension().flatMap(f=>{
+   if(f.time<.7||f.time>1.2)return [f];
+   if(mode==='time-gap')return [];
+   return [{...f,landmarks:mode==='missing'?null:f.landmarks.map(p=>({...p,visibility:.1}))}];
+  });
+  assert.equal(liveEvents(interrupted).length,0,mode);
+  const recovery=delayedExtension().map(f=>({...f,time:f.time+4}));
+  assert.equal(liveEvents([...interrupted,...recovery]).length,1,mode+' recovery');
+ }
+});
+test('ordinary repeated shots retain their count offline and live',()=>{
+ const trace=[0,4,8,12].flatMap(offset=>frames().map(f=>({...f,time:f.time+offset})));
+ const before=structuredClone(trace);
+ assert.equal(detectSessionShots(trace,'right',1,{start:0,end:14}).length,4);
+ assert.equal(liveEvents(trace).length,4);assert.deepEqual(trace,before);
+});
+// Pose-only detection cannot prove ball release. Record this boundary rather
+// than pretending that every overhead pass or ball-held shooting arc is rejected.
+test('shoot-like held-ball arc remains a Low-confidence pose candidate',()=>{
+ const trace=delayedExtension().map(f=>({...f,ball:{...f.landmarks[16],radius:.025,confidence:.9,trackId:1}}));
+ const events=liveEvents(trace);assert.equal(events.length,1);assert.equal(events[0].source,'pose');assert.equal(events[0].confidence,'Low');
+});
