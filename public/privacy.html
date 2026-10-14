@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>データの扱い | Personal Sports Form Lab</title><style>body{font:16px/1.8 system-ui,sans-serif;max-width:720px;margin:32px auto;padding:0 20px;color:#173327;background:#f7faf8}h1{font-size:24px}h2{font-size:19px}a{color:#11665c}li{margin:8px 0}</style></head><body>
+<h1>Personal Sports Form Lab：データの扱い</h1><p>更新日：2026年10月14日</p>
+<p>このアプリは個人のバスケットボール練習を振り返るためのツールです。運営・連絡先はGoogleの同意画面の提供者情報をご確認ください。</p>
+<h2>端末内の保存</h2><p>動画、ショット認識結果、フォーム評価、骨格の記録、レビュー修正、Good Form、判定設定は、このブラウザのIndexedDBに保存します。カメラ映像と姿勢分析は端末内で処理します。骨格時系列は保存済みの2D・14点が対象で、取得していない3D座標などを作成しません。</p>
+<h2>Google Driveへの保存</h2><p>「Google Driveに保存」を開き、Googleアカウントを連携し、保存する項目と動画を選んで保存ボタンを押した場合にだけ、Google Driveへ送信します。セッションの基本情報（ID、日時、保存状態）と選んだデータを、本人所有の専用フォルダに保存します。自動アップロード、公開リンクの作成、自動削除はしません。過去の保存版は上書きせず、修正後の内容は新しい版として残します。</p>
+<p>求める権限は <code>drive.file</code> のみです。このアプリが作成・利用するファイルの管理権限で、Google Drive全体へのアクセスは求めません。このアプリのコードはDriveファイルを削除しません。連携画面の準備にはGoogleのIdentity Servicesスクリプトを読み込み、接続時にアカウント表示名・メールアドレス・識別情報をDrive APIから確認します。</p>
+<h2>認証情報</h2><p>Googleのアクセストークンはタブのメモリだけで扱います。IndexedDB、ローカルストレージ、URL、GitHub、アプリのログに保存しません。Client Secretとリフレッシュトークンは使用しません。公開識別子であるOAuth Client ID、再試行用のDriveファイルID、保存確認メモは、このブラウザに保存する場合があります。</p>
+<h2>削除・許可の解除</h2><p>アプリの「連携を解除」、または<a href="https://myaccount.google.com/connections" rel="noopener noreferrer">Googleアカウントの接続設定</a>から許可を解除できます。連携解除はDriveや端末の保存データの削除とは別です。Driveの保存データはご本人がDriveで管理・削除してください。必要な記録を残すため、Safariのサイトデータを対処目的で消さないでください。</p>
+<h2>利用目的と限界</h2><p>データは本人の練習の振り返り、本人が行う解析、将来のアプリ移行のために保存します。この保存機能は自動学習を行いません。広告、第三者への販売、アプリ提供者のサーバーへの練習データ送信は実装していません。Googleでの保存には<a href="https://policies.google.com/privacy" rel="noopener noreferrer">Googleのプライバシーポリシー</a>も適用されます。OS・ブラウザの強制終了や空き容量不足により未保存のデータが残らない場合があります。保存時に不足を表示し、取得できないデータを保存済みと扱いません。</p>
+<p>公開の<a href="https://github.com/fumitaka73/personal-sports-form-lab/issues" rel="noopener noreferrer">GitHub Issue</a>へ問い合わせる場合、動画、個人のJSON、認証情報は添付しないでください。</p><p><a href="./">アプリに戻る</a></p>
+</body></html>

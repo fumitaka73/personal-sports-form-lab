@@ -113,3 +113,23 @@ export async function retainDetectionVideos(ids){
 export async function saveTemporaryVideoBounded(row,limit=128*1024*1024){
  const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('temporaryVideos','readwrite'),store=tx.objectStore('temporaryVideos'),r=store.getAll();let error;r.onsuccess=()=>{try{const total=r.result.filter(v=>v.id!==row.id).reduce((n,v)=>n+(v.bytes??v.blob?.size??0),0);if(total+row.bytes>limit){error=new Error('動画の容量上限です。既存動画は削除しません。必要な動画を書き出してから整理してください。');tx.abort();return;}store.put(row);}catch(e){error=e;tx.abort();}};tx.oncomplete=resolve;tx.onerror=()=>reject(error??tx.error);tx.onabort=()=>reject(error??tx.error);});
 }
+
+// Drive export reads only this session. No schema change or record migration.
+export const getCoachSession=id=>transact('results','readonly',s=>s.get(id));
+export const getPoseSession=id=>transact('poseSessions','readonly',s=>s.get(id));
+export const getPoseChunk=id=>transact('poseChunks','readonly',s=>s.get(id));
+export async function poseChunkInventory(sessionId){
+ const db=await database;return new Promise((resolve,reject)=>{
+  const tx=db.transaction('poseChunks','readonly'),request=tx.objectStore('poseChunks').openCursor(IDBKeyRange.bound(sessionId+':',sessionId+':\uffff')),rows=[];
+  request.onsuccess=()=>{try{const c=request.result;if(!c)return;const row=c.value;if(row.sessionId!==sessionId)throw new Error('姿勢のセッションIDが一致しません');const a=new Float32Array(row.buffer);rows.push({id:row.id,index:row.index,bytes:row.buffer.byteLength,count:a.length/POSE_STRIDE,first:a[0],last:a[a.length-POSE_STRIDE]});c.continue();}catch(error){tx.abort();reject(error);}};
+  tx.oncomplete=()=>resolve(rows);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+ });
+}
+// Allocate one stable Drive ID atomically across tabs, before sending any content.
+export async function reserveDriveId(key,proposedId){
+ const db=await database;return new Promise((resolve,reject)=>{
+  const tx=db.transaction('settings','readwrite'),store=tx.objectStore('settings'),r=store.get(key);let id,error;
+  r.onsuccess=()=>{try{id=r.result?.value?.id??proposedId;if(!r.result)store.add({id:key,value:{id}});}catch(e){error=e;tx.abort();}};
+  tx.oncomplete=()=>resolve(id);tx.onerror=()=>reject(error??tx.error);tx.onabort=()=>reject(error??tx.error);
+ });
+}

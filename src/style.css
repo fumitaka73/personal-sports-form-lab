@@ -60,3 +60,10 @@ header{padding-top:calc(12px + env(safe-area-inset-top))}
 @media(orientation:landscape) and (max-height:600px){.coach-actions{grid-template-columns:1fr 1fr 1fr}.coach-actions #coach-voice-test{grid-column:auto}.coach-hud #practice-voice{font-size:11px}}
 
 .is-coaching #practice-capacity,.is-coaching #practice-voice:not([data-show]){display:none}
+.drive-save{margin-top:12px}.drive-save fieldset{border:1px solid #cddbd4;border-radius:10px;margin:10px 0;padding:10px;min-width:0}
+.drive-save fieldset>label{display:flex;gap:8px;align-items:flex-start;padding:9px 0;font-size:14px}
+.drive-save input[type=checkbox]{width:20px;height:20px;flex-shrink:0}.drive-save input[type=text],#drive-client-id{width:100%;min-width:0}
+.drive-save progress{width:100%;height:14px}.drive-save #drive-status{font-size:14px;overflow-wrap:anywhere}.drive-save .sync-controls{flex-wrap:wrap}.drive-save .sync-controls button{min-height:44px;flex:1 1 130px}
+.drive-save #drive-settings summary{min-height:44px;padding:8px 0;cursor:pointer}.drive-save #drive-link{margin:8px 0}
+.drive-save fieldset>label{min-height:44px;box-sizing:border-box}
+.drive-save #drive-videos>summary{min-height:44px;padding:8px 0;cursor:pointer}
