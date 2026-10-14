@@ -73,7 +73,7 @@ export function shotCandidates(frames,hand,aspect,range,includePose=false){
     if(!signal.qualifies)continue;
     const strength=signal.strength;
     const release=Math.min(range.end-0.01,b.time+0.08),phases=boundaries(rows,release,range);
-    if(phases)poseCandidates.push({phases,strength});
+    if(phases)poseCandidates.push({phases,strength,motionTime:b.time});
   }
   return [...candidates,...poseCandidates.map(best=>({...best,source:'pose',confidence:'Low',releaseWindow:null,candidateCount:0,ballTrackedFrames:frames.filter(f=>f.ball).length,reason:'ボール離れを確認できないため、手首の上昇と肘の伸展が大きい場面からリリースを推定しました。'}))];
 }
