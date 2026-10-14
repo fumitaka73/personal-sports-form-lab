@@ -334,3 +334,4 @@ Live Coachの軽量姿勢時系列を動画と独立して保存し、人間の�
 - [v0.21.6 練習開始・音声・録画トラブルの確認](docs/issue-30-practice-start.md)
 - [v0.22.0 Google Drive保存・Google Cloud設定・iPhone確認手順](docs/issue-37-google-drive.md)
 - [Google Driveに保存するJSON・動画のデータ形式](docs/issue-37-data-format.md)
+- [実練習データで確認したシュート検出の改善・精度比較・iPhone確認手順](docs/practice-detection-improvement.md)

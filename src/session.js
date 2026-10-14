@@ -1,4 +1,4 @@
-export const SESSION_POSE_RULE_VERSION='session-pose-1.1';
+export const SESSION_POSE_RULE_VERSION='session-pose-1.2';
 import { shotCandidates, shotMotionRows } from './auto-phases.js';
 export const SESSION_POSE_THRESHOLDS=Object.freeze({prepHeight:.7,prepElbow:165,peakHeight:.15,minRise:.28,minExtendedElbow:100,minExtension:8,minStrength:.12});
 export function detectSessionShots(frames, hand, aspect, range, parameters=SESSION_POSE_THRESHOLDS) {
@@ -28,7 +28,18 @@ export function detectSessionShots(frames, hand, aspect, range, parameters=SESSI
         const missingElbow=!Number.isFinite(ready.elbow)||!Number.isFinite(peak.elbow);
         return missingElbow&&peak.wristHeight-ready.wristHeight>=.5&&high.length>=3;
       };
-      const peak=high.find((r,j)=>j&&r.time-high[j-1].time<=0.6&&(candidate.source!=='pose'||supportsPose(r)));
+      const sustained = peak => {
+        // Receiving a returning ball can briefly raise and straighten the arm.
+        // Require 0.25s of continuous raised-hand evidence after extension;
+        // ball departure remains independent of this pose-only safeguard.
+        const post=rise.filter(r=>r.time>=peak.time);
+        for(let j=0;j<post.length;j++){
+          if(post[j].wristHeight<thresholds.peakHeight||j&&post[j].time-post[j-1].time>.35)return false;
+          if(post[j].time-peak.time>=.25-1e-5)return true;
+        }
+        return false;
+      };
+      const peak=high.find((r,j)=>j&&r.time-high[j-1].time<=0.6&&(candidate.source!=='pose'||supportsPose(r)&&sustained(r)));
       if(!peak)continue;
       const ascent=rise.filter(r=>r.time<=peak.time);
       if(ascent.some((r,j)=>j&&r.time-ascent[j-1].time>0.65))continue;

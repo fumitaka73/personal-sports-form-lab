@@ -152,3 +152,38 @@ test('shoot-like held-ball arc remains a Low-confidence pose candidate',()=>{
  const trace=delayedExtension().map(f=>({...f,ball:{...f.landmarks[16],radius:.025,confidence:.9,trackId:1}}));
  const events=liveEvents(trace);assert.equal(events.length,1);assert.equal(events[0].source,'pose');assert.equal(events[0].confidence,'Low');
 });
+
+// Anonymous analytic motion, not sampled or rescaled from a personal trace.
+function receivingMotion(hold=.1){
+ return Array.from({length:61},(_,i)=>{
+  const time=i/20,p=structuredClone(frames()[0].landmarks);
+  const rise=Math.max(0,Math.min(1,(time-.5)/.5)),fall=Math.max(0,Math.min(1,(time-1-hold)/.2));
+  p[16]={x:.64,y:.48-.21*rise+.21*fall,visibility:.99};
+  setElbowAngle(p,time>=1&&time<1+hold?165:100);
+  return {time,landmarks:p};
+ });
+}
+test('brief arm extension while receiving a ball is not a sustained pose shooting cycle',()=>{
+ const trace=receivingMotion();assert.equal(detectSessionShots(trace,'right',1,{start:0,end:3}).length,0);assert.equal(liveEvents(trace).length,0);
+});
+test('raised follow-through supported for 0.25s still detects once without promoting confidence',()=>{
+ const trace=receivingMotion(.35),events=liveEvents(trace);
+ assert.equal(detectSessionShots(trace,'right',1,{start:0,end:3}).length,1);assert.equal(events.length,1);assert.equal(events[0].confidence,'Low');
+});
+test('live confirms 0.8s after observed motion before a later tracking break, without polling overshoot',()=>{
+ const trace=delayedExtension().map(f=>f.time>=1.95?{...f,landmarks:null}:f),events=liveEvents(trace);
+ assert.equal(events.length,1);assert.ok(events[0].at-events[0].motionTime>=.8-1e-5);assert.ok(events[0].at<1.95);assert.equal(events[0].confidence,'Low');
+});
+test('break before the evidence deadline clears the deadline and cannot emit a stale shot',()=>{
+ for(const mode of ['missing','low-visibility','time-gap']){
+  const trace=delayedExtension().flatMap(f=>f.time<1.85?[f]:mode==='time-gap'?[]:[{...f,landmarks:mode==='missing'?null:f.landmarks.map(p=>({...p,visibility:.1}))}]);
+  assert.equal(liveEvents(trace).length,0,mode);
+  assert.equal(liveEvents([...trace,...delayedExtension().map(f=>({...f,time:f.time+4}))]).length,1,mode+' new independent cycle');
+ }
+});
+test('camera geometry reset discards the scheduled deadline while keeping past shot count',()=>{
+ const detector=new ShotDetector({live:true});for(const f of delayedExtension().filter(f=>f.time<1.85))detector.processFrame(f.time*1000,f.landmarks);
+ assert.ok(Number.isFinite(detector.evidenceAt));detector.resetContinuity();assert.equal(detector.evidenceAt,Infinity);
+ const events=[];for(const f of delayedExtension().filter(f=>f.time>=1.85))events.push(...detector.processFrame(f.time*1000,f.landmarks).events);
+ assert.equal(events.length,0);
+});

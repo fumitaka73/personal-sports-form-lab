@@ -5,12 +5,12 @@ import {liveMetrics} from './live-metrics.js';
 // Incremental adapter around the existing Session detector, not a new classifier.
 // Timestamp is milliseconds, matching camera/performance timestamps.
 export class ShotDetector{
- constructor({hand='right',aspect=1,live=false,range=null,parameters=SESSION_POSE_THRESHOLDS}={}){this.parameters={...SESSION_POSE_THRESHOLDS,...parameters};this.hand=hand;this.aspect=aspect;this.live=live;this.range=range;this.frames=[];this.history=[];this.count=0;this.lastRelease=-Infinity;this.lastEvaluation=-Infinity;this.previous=null;this.preparation=null;this.lastEvent=null;this.state='IDLE';this.signals={};this.presence=new PoseContinuity();this.lastInput=-Infinity;}
- resetContinuity(reason='姿勢の連続性を確認中'){this.frames=[];this.previous=null;this.preparation=null;this.state='IDLE';this.signals={};this.presence.reset();this.presence.reason=reason;}
+ constructor({hand='right',aspect=1,live=false,range=null,parameters=SESSION_POSE_THRESHOLDS}={}){this.parameters={...SESSION_POSE_THRESHOLDS,...parameters};this.hand=hand;this.aspect=aspect;this.live=live;this.range=range;this.frames=[];this.history=[];this.count=0;this.lastRelease=-Infinity;this.lastEvaluation=-Infinity;this.evidenceAt=Infinity;this.previous=null;this.preparation=null;this.lastEvent=null;this.state='IDLE';this.signals={};this.presence=new PoseContinuity();this.lastInput=-Infinity;}
+ resetContinuity(reason='姿勢の連続性を確認中'){this.evidenceAt=Infinity;this.frames=[];this.previous=null;this.preparation=null;this.state='IDLE';this.signals={};this.presence.reset();this.presence.reason=reason;}
  processFrame(timestamp,landmarks,ball=null,frameTime=null){
   this.completed=[];const time=frameTime??timestamp/1000;if(!Number.isFinite(time)||this.lastInput>=time)return this.snapshot();
   this.lastInput=time;const frame={time,landmarks,ball};
-  if(this.live){const status=this.presence.update(time,landmarks,this.hand,this.aspect);if(status.broken){this.lastEvaluation=-Infinity;this.frames=[];this.previous=null;this.preparation=null;this.state='IDLE';}if(!status.ready){if(this.presence.previous)this.frames.push(frame);this.signals={};return this.snapshot();}}
+  if(this.live){const status=this.presence.update(time,landmarks,this.hand,this.aspect);if(status.broken){this.evidenceAt=Infinity;this.lastEvaluation=-Infinity;this.frames=[];this.previous=null;this.preparation=null;this.state='IDLE';}if(!status.ready){if(this.presence.previous)this.frames.push(frame);this.signals={};return this.snapshot();}}
   this.frames.push(frame);
   if(!this.live)return this.snapshot();
   this.frames=this.frames.filter(f=>f.time>=time-10);
@@ -24,15 +24,21 @@ export class ShotDetector{
   if(motion.qualifies)this.state='RISING';
   const ready=this.preparation;
   if(ready&&row.wristHeight>=this.parameters.peakHeight&&row.wristHeight-ready.wristHeight>=this.parameters.minRise&&row.elbow>=this.parameters.minExtendedElbow&&row.elbow-ready.elbow>=this.parameters.minExtension)this.state='RELEASE_CANDIDATE';
-  if(time-this.lastEvaluation>=.25-1e-5){
-   this.lastEvaluation=time;
+  if(time-this.lastEvaluation>=.25-1e-5||time>=this.evidenceAt-1e-5){
+   this.lastEvaluation=time;this.evidenceAt=Infinity;
    const candidates=this.detect({start:this.frames[0].time,end:time});
    for(const candidate of candidates){
     const release=candidate.phases.release;
     if(release-this.lastRelease<1.5)continue;
     this.state='FOLLOW_THROUGH';
-    // Wait for the detector's existing 0.8s post-release evidence window.
-    if(time-release<.8)continue;
+    // Pose release is a heuristic (+0.08s), not an observed ball release.
+    // Keep 0.8s after the actual motion sample and check its deadline on
+    // the next frame, instead of adding up to 0.25s of polling delay.
+    // Only a deadline is retained; candidates are redetected from the
+    // current continuous trace and the deadline is cleared on tracking loss.
+    const observed=candidate.source==='pose'&&Number.isFinite(candidate.motionTime)?candidate.motionTime:release;
+    const evidenceAt=observed+.8;
+    if(time<evidenceAt-1e-5){this.evidenceAt=Math.min(this.evidenceAt,evidenceAt);continue;}
     this.count++;this.lastRelease=release;this.lastEvent={number:this.count,at:time,...candidate};this.completed.push(this.lastEvent);this.preparation=null;this.state='COMPLETE';
    }
   }
