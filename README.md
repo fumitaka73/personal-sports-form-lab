@@ -330,3 +330,7 @@ Live Coachの軽量姿勢時系列を動画と独立して保存し、人間の�
 - [v0.21.4 連続手動登録・検証JSONの使い方](docs/issue-31-manual-review.md)
 
 - [v0.21.5 リリース登録・先頭再生・±3秒の操作](docs/issue-33-release-review.md)
+
+- [v0.21.6 練習開始・音声・録画トラブルの確認](docs/issue-30-practice-start.md)
+- [v0.22.0 Google Drive保存・Google Cloud設定・iPhone確認手順](docs/issue-37-google-drive.md)
+- [Google Driveに保存するJSON・動画のデータ形式](docs/issue-37-data-format.md)

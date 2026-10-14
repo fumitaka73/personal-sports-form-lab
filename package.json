@@ -1,6 +1,6 @@
 {
   "name": "personal-sports-form-lab",
-  "version": "0.21.6",
+  "version": "0.22.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,6 +14,7 @@
     "vite": "8.3.3"
   },
   "dependencies": {
-    "@mediapipe/pose": "0.5.1675469404"
+    "@mediapipe/pose": "0.5.1675469404",
+    "@noble/hashes": "2.4.0"
   }
 }
