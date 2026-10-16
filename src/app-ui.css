@@ -176,3 +176,36 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 .quick-seek-row,.full-overview-row{display:grid;grid-template-columns:44px minmax(0,1fr);gap:3px;align-items:center;min-width:0}
 .quick-seek-row button,.full-overview-row button{min-height:44px;min-width:44px;padding:3px;margin:0;font-size:12px}
 .detection-primary-guide{font-size:12px;line-height:1.5;margin:6px 0;padding:8px}.detection-mode-purpose{font-size:12px;line-height:1.5;margin:6px 0}
+
+/* Imported-video review: bounded native player, nearby release actions, no wide table. */
+.offline-panel{max-width:880px;margin-inline:auto;min-width:0}
+.offline-panel>p,.offline-panel details p{overflow-wrap:anywhere}
+.offline-panel .offline-stage{position:relative;display:flex;justify-content:center;background:#111;border-radius:12px;overflow:hidden;width:min(100%,calc(min(32svh,270px)*var(--offline-ratio,1.777)));aspect-ratio:var(--offline-ratio,1.777);height:auto;min-height:0;margin-inline:auto}
+.offline-stage video{position:absolute;inset:0;display:block;width:100%;height:100%;max-height:100%;object-fit:contain;margin:0}
+.offline-stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.offline-transport{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-top:8px}
+.offline-transport button{padding:8px;min-height:44px;min-width:44px}
+.offline-transport output{font-variant-numeric:tabular-nums;font-size:.9rem;white-space:nowrap}
+.offline-panel .offline-seek-label{margin:4px 0}
+.offline-seek-label input{width:100%;min-height:32px;padding:0}
+.offline-review-actions,.offline-settings,.offline-metric-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.offline-review-actions button{min-height:48px;padding:8px;font-size:.85rem}
+.offline-counts{font-size:.9rem;font-weight:600;margin-top:10px;line-height:1.7}
+.offline-shot-list{display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow-y:auto}
+.offline-shot-list button{min-height:44px;padding:8px}
+.offline-shot-list .active{outline:2px solid var(--accent,#b5e86b)}
+.offline-candidate{padding:10px 0;border-bottom:1px solid #8884;display:grid;gap:6px;min-width:0}
+.offline-candidate>div{display:flex;gap:6px;flex-wrap:wrap}
+.offline-candidate>span{font-size:.85rem}
+.offline-panel .field{min-width:0}
+.offline-panel select,.offline-panel textarea{max-width:100%;width:100%}
+.offline-panel progress{width:100%}
+.offline-panel .check{display:flex;align-items:flex-start;gap:8px;margin:14px 0;font-size:.9rem}
+.offline-panel .check input{width:22px;height:22px;flex-shrink:0}
+.offline-compare{margin-top:16px}
+.offline-metric-cards article{border:1px solid #8884;border-radius:12px;padding:12px;min-width:0}
+.offline-metric-cards dl{font-size:.85rem;display:grid;grid-template-columns:1fr auto;gap:6px}
+.offline-metric-cards dd{margin:0}
+@media(max-width:420px){.offline-metric-cards{grid-template-columns:1fr}}
+@media(orientation:landscape) and (max-height:520px){.offline-panel .offline-stage{width:min(100%,calc(min(42svh,220px)*var(--offline-ratio,1.777)));height:auto;min-height:0}.offline-review-actions{gap:6px}.offline-panel h2{font-size:1.1rem}}
+#offline-download-json{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;margin-top:8px;text-decoration:none;touch-action:manipulation}

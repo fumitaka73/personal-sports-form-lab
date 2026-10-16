@@ -1,9 +1,9 @@
 import {iterateChunks,POSE_STRIDE} from './pose-archive.js';
 import {ratingEntry} from './session-feedback.js';
 const database = new Promise((resolve, reject) => {
-  const request = indexedDB.open('sports-form-lab', 4);
+  const request = indexedDB.open('sports-form-lab', 5);
   request.onupgradeneeded = () => {
-    for (const name of ['videos', 'results', 'settings', 'temporaryVideos', 'poseSessions', 'poseChunks', 'calibrations']) {
+    for (const name of ['videos', 'results', 'settings', 'temporaryVideos', 'poseSessions', 'poseChunks', 'calibrations', 'offlineAssets', 'offlineCaches', 'offlineChunks', 'offlineRuns', 'offlineAnnotations']) {
       if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name, { keyPath: 'id' });
     }
   };
@@ -132,4 +132,22 @@ export async function reserveDriveId(key,proposedId){
   r.onsuccess=()=>{try{id=r.result?.value?.id??proposedId;if(!r.result)store.add({id:key,value:{id}});}catch(e){error=e;tx.abort();}};
   tx.oncomplete=()=>resolve(id);tx.onerror=()=>reject(error??tx.error);tx.onabort=()=>reject(error??tx.error);
  });
+}
+
+// Additive v5 stores: imported videos never share the legacy live Pose encoding.
+export const offlineRecord=(store,id)=>transact(store,'readonly',s=>s.get(id));
+export async function offlineRecords(store,assetId){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction(store,'readonly'),request=tx.objectStore(store).openCursor(),rows=[];
+ request.onsuccess=()=>{const c=request.result;if(!c)return;if(!assetId||c.value.assetId===assetId){const {blob,...metadata}=c.value;rows.push(store==='offlineAssets'?{...metadata,hasVideo:!!blob}:c.value);}c.continue();};tx.oncomplete=()=>resolve(rows);tx.onerror=()=>reject(tx.error);});
+}
+export async function offlineWrite(writes,{expectedRevision,immutable=false}={}){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction([...new Set(writes.map(w=>w.store))],'readwrite');let error;
+ const write=()=>{try{for(const {store,row}of writes)tx.objectStore(store)[immutable?'add':'put'](row);}catch(e){error=e;tx.abort();}};
+ if(expectedRevision!==undefined){const row=writes[0].row,r=tx.objectStore('offlineAnnotations').get(row.id);r.onsuccess=()=>{if((r.result?.revision??0)!==expectedRevision){error=new Error('別の画面で修正が保存されています。再読み込みしてください。');tx.abort();}else write();};}else write();
+ tx.oncomplete=resolve;tx.onerror=event=>{error??=event.target?.error;};tx.onabort=()=>reject(error??tx.error??new Error('保存が中断されました。'));
+ });
+}
+export async function offlineReadChunks(cacheId,start,end){
+ const db=await database;return new Promise((resolve,reject)=>{const tx=db.transaction('offlineChunks','readonly'),request=tx.objectStore('offlineChunks').openCursor(IDBKeyRange.bound(cacheId+':',cacheId+':\uffff')),rows=[];
+ request.onsuccess=()=>{const c=request.result;if(!c)return;const row=c.value;if(row.first>end)return;if(row.last>=start)rows.push(row);c.continue();};tx.oncomplete=()=>resolve(rows);tx.onerror=()=>reject(tx.error);});
 }
