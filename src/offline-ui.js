@@ -9,6 +9,7 @@ import {
   loadOfflineWindow,
   removeOfflineVideo,
 } from './offline-storage.js';
+import { createOfflinePosition, groupTimelineMarkers } from './offline-position.js';
 import { extractOfflinePose, runOfflineAnalysis } from './offline-analysis.js';
 import {
   activeLabels,
@@ -50,6 +51,7 @@ export function mountOfflineAnalysis(
     run = null,
     annotations = null,
     selectedLabel = null,
+    selectedCandidate = null,
     formReviewSnapshot = null,
     videoURL = null,
     exportURL = null,
@@ -57,21 +59,24 @@ export function mountOfflineAnalysis(
     overlayEpoch = 0,
     windowRange = null,
     frameCallback = null,
-    benchmark = null;
-  container.innerHTML = `<section class="panel offline-panel"><p class="eyebrow">保存した動画で検証</p><h2>動画を読み込んで再解析</h2><p>動画を保存 → シュートを確認・修正 → 同じ骨格で検出ルールを比較</p><div class="offline-import"><label class="upload">＋ 写真・ファイルから動画を選ぶ<input type="file" accept="video/*" id="offline-upload"></label><label class="field">読み込み済みの動画<select id="offline-assets"><option value="">動画を選択</option></select></label></div><p id="offline-status" role="status" aria-live="polite"></p><div id="offline-progress-area" hidden><progress id="offline-progress" max="1" value="0"></progress><p id="offline-progress-text" role="status"></p><button id="offline-cancel" type="button" class="secondary">処理を中断</button></div><section id="offline-workspace" hidden>
- <h3 id="offline-title"></h3><p id="offline-video-state" class="fineprint"></p><div class="offline-stage"><video id="offline-player" controls playsinline preload="metadata"></video><canvas id="offline-bones" aria-hidden="true"></canvas></div>
+    benchmark = null,
+    analysisPhase = null;
+  container.innerHTML = `<section class="panel offline-panel"><p class="eyebrow">保存した動画で検証</p><h2>動画を読み込んで再解析</h2><nav class="offline-steps" aria-label="確認の順番"><span>① 動画</span><span>② 骨格解析</span><span>③ 候補確認</span><span>④ 追加・修正</span><span>⑤ 正解保存</span><span>⑥ 比較</span></nav><details id="offline-source" open><summary>① 動画を選ぶ・切り替える</summary><div class="offline-import"><label class="upload">＋ 写真・ファイルから動画を選ぶ<input type="file" accept="video/*" id="offline-upload"></label><label class="field">読み込み済みの動画<select id="offline-assets"><option value="">動画を選択</option></select></label></div></details><p id="offline-status" role="status" aria-live="polite"></p><div id="offline-progress-area" hidden><progress id="offline-progress" max="1" value="0"></progress><p id="offline-progress-text" role="status"></p><button id="offline-cancel" type="button" class="secondary">処理を中断</button></div><section id="offline-workspace" hidden>
+ <details id="offline-analysis-step" class="app-help" open><summary>② 骨格を解析して候補を探す</summary><div class="offline-analysis-actions"><button type="button" class="primary" id="offline-extract">動画から骨格を読み取る</button><button type="button" class="primary" id="offline-replay">骨格を使って再解析</button></div><details id="offline-analysis-settings" class="app-help"><summary>手・撮影角度・解析の詳細設定</summary><div class="offline-settings"><label class="field">シュートする手<select id="offline-hand"><option value="right">右手</option><option value="left">左手</option></select></label><label class="field">撮影角度<select id="offline-angle"><option value="side">横</option><option value="diagonal">斜め横</option><option value="front">正面</option></select></label><label class="field">種別<select id="offline-type"><option value="jump">ジャンプシュート</option><option value="set">セットシュート</option><option value="free">フリースロー</option></select></label><label class="field">読み取り間隔<select id="offline-fps"><option value="15">標準 · 毎秒15枚</option><option value="30">詳細 · 毎秒30枚（時間がかかります）</option></select></label></div><label class="field">使う骨格データ<select id="offline-caches"></select></label><p id="offline-cache-info" class="fineprint"></p><label class="field">検出ルール<select id="offline-algorithm"><option value="current">現在のルール（PR #39後）</option><option value="legacy">比較用 · PR #39前</option></select></label><label class="field">保存した解析結果<select id="offline-runs"></select></label><p id="offline-form-info" class="fineprint"></p></details></details>
+ <h3 id="offline-title"></h3><details class="offline-file-info"><summary>元動画の保存情報</summary><p id="offline-video-state" class="fineprint"></p></details><section class="offline-review-deck" aria-label="③ 候補を確認・④ 追加と修正"><div class="offline-visual"><div id="offline-counts" class="offline-counts"></div><p id="offline-analysis-state" role="status" class="fineprint"></p><div class="offline-stage"><video id="offline-player" controls playsinline preload="metadata"></video><canvas id="offline-bones" aria-hidden="true"></canvas></div></div><div class="offline-controls">
  <div class="offline-transport"><button type="button" class="secondary" id="offline-start">先頭へ</button><button type="button" class="secondary" data-offline-skip="-3">−3秒</button><output id="offline-position">0:00.00</output><button type="button" class="secondary" data-offline-skip="3">＋3秒</button></div>
+ <div id="offline-timeline" class="offline-timeline" aria-label="シュートの登録位置"><div class="offline-timeline-lane"><span>自動候補 ◆</span><div id="offline-auto-markers" class="offline-marker-track"></div></div><div class="offline-timeline-lane"><span>確認済み ●<small>手動は緑</small></span><div id="offline-truth-markers" class="offline-marker-track"></div></div><i id="offline-playhead" aria-hidden="true"></i></div><div id="offline-marker-choices" class="offline-marker-choices" hidden></div>
  <label class="field offline-seek-label">動画の位置<input id="offline-seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="動画の位置（開始から秒）"></label>
- <div class="offline-review-actions"><button type="button" class="primary" id="offline-add">ここがリリース · 追加</button><button type="button" class="secondary" id="offline-move" disabled>選んだシュートをここへ修正</button></div><p class="fineprint">ボールが手を離れる瞬間を登録します。ディップ開始ではありません。</p>
- <div id="offline-counts" class="offline-counts"></div><p id="offline-save" role="status"></p><div id="offline-shots"></div><div id="offline-label-editor" hidden><h3>確認したシュート</h3><label class="field">成否<select id="offline-outcome"><option value="unknown">未確認・不明</option><option value="made">成功</option><option value="missed">失敗</option></select></label><label class="field">表示されたフォーム評価は合っていますか？<select id="offline-form-rating"><option value="unreviewed">まだ確認していない</option><option value="good">合っている</option><option value="bad">間違っている</option><option value="unsure">判断できない</option></select></label><label class="field">メモ<textarea id="offline-note" rows="2"></textarea></label><button type="button" class="primary" id="offline-save-label">この確認を保存</button><button type="button" class="secondary" id="offline-remove-label">この登録を取り消す</button><p id="offline-label-analysis"></p></div>
- <label class="check"><input id="offline-complete" type="checkbox">動画の最後まで確認し、見逃し・誤検出の修正を終えた</label>
- <details id="offline-analysis-settings" class="app-help" open><summary>骨格の読み取り・再解析</summary><div class="offline-settings"><label class="field">シュートする手<select id="offline-hand"><option value="right">右手</option><option value="left">左手</option></select></label><label class="field">撮影角度<select id="offline-angle"><option value="side">横</option><option value="diagonal">斜め横</option><option value="front">正面</option></select></label><label class="field">種別<select id="offline-type"><option value="jump">ジャンプシュート</option><option value="set">セットシュート</option><option value="free">フリースロー</option></select></label><label class="field">読み取り間隔<select id="offline-fps"><option value="15">標準 · 毎秒15枚</option><option value="30">詳細 · 毎秒30枚（時間がかかります）</option></select></label></div><label class="field">使う骨格データ<select id="offline-caches"></select></label><p id="offline-cache-info" class="fineprint"></p><button type="button" class="secondary" id="offline-extract">動画から骨格を読み取る</button><label class="field">検出ルール<select id="offline-algorithm"><option value="current">現在のルール（PR #39後）</option><option value="legacy">比較用 · PR #39前</option></select></label><button type="button" class="primary" id="offline-replay">骨格を使って再解析</button><label class="field">保存した解析結果<select id="offline-runs"></select></label><p id="offline-form-info" class="fineprint"></p></details>
- <section class="offline-compare"><h3>同じ正解で比較する</h3><p>全編を確認した正解位置と、自動検出を±0.5秒で1本ずつ照合します。レビューしただけではライブの判定やAI設定は変わりません。</p><button type="button" class="primary" id="offline-compare">変更前後を比較</button><div id="offline-metrics"></div><button type="button" class="secondary" id="offline-export">正解・骨格・解析結果をJSONで書き出す</button><div id="offline-export-download"></div></section>
+ <div id="offline-candidate-selection" class="offline-candidate-selection" hidden></div><div class="offline-review-actions"><button type="button" class="primary" id="offline-add">ここがリリース · 追加</button><button type="button" class="secondary" id="offline-move" disabled>選んだシュートをここへ修正</button></div><p class="offline-release-help">ボールが手を離れる瞬間を登録 · 追加・修正は自動保存</p><p id="offline-save" role="status"></p></div></section>
+ <div id="offline-shots"></div><details id="offline-label-editor" class="app-help" hidden><summary>選んだシュートの成否・メモ・取り消し</summary><label class="field">成否<select id="offline-outcome"><option value="unknown">未確認・不明</option><option value="made">成功</option><option value="missed">失敗</option></select></label><label class="field">表示されたフォーム評価は合っていますか？<select id="offline-form-rating"><option value="unreviewed">まだ確認していない</option><option value="good">合っている</option><option value="bad">間違っている</option><option value="unsure">判断できない</option></select></label><label class="field">メモ<textarea id="offline-note" rows="2"></textarea></label><button type="button" class="primary" id="offline-save-label">この確認を保存</button><button type="button" class="secondary" id="offline-remove-label">この登録を取り消す</button><p id="offline-label-analysis"></p></details>
+
+ <details class="offline-compare app-help" id="offline-comparison-step"><summary>⑤ 正解の確認を終える → ⑥ 認識精度を比較</summary><p>追加・修正はその都度ローカル保存されます。</p> <label class="check"><input id="offline-complete" type="checkbox">動画の最後まで確認し、見逃し・誤検出の修正を終えた</label><p>全編を確認した正解位置と、自動検出を±0.5秒で1本ずつ照合します。レビューしただけではライブの判定やAI設定は変わりません。</p><button type="button" class="primary" id="offline-compare">変更前後を比較</button><div id="offline-metrics"></div><button type="button" class="secondary" id="offline-export">正解・骨格・解析結果をJSONで書き出す</button><div id="offline-export-download"></div></details>
  <details class="app-help"><summary>元動画・保存・制限について</summary><p>元動画は解析より先にこのブラウザへ保存します。再解析では元動画を複製せず、手動修正と過去の解析を保持します。標準・詳細とも一定間隔の読み取りです。元動画の全フレームを取得した保証はありません。</p><p>Safariは画面を閉じると処理を止めることがあります。解析中はこの画面を開いてください。人物の取り違えや、他アプリの描画による推定への影響があります。シュートの成否は自動判定しません。</p><p>この読み込み動画のGoogle Drive直接保存は次の段階です。今はJSONと写真・ファイルの元動画を一緒に保管してください。既存のライブ練習のDrive保存は引き続き使えます。</p><button type="button" class="secondary danger" id="offline-remove-video">この元動画だけを端末から削除</button><p>削除しても骨格・解析・手動修正は残ります。同じファイルを選び直すと再び紐づきます。Safariのサイトデータは消さないでください。</p></details></section></section>`;
   const $ = (s) => container.querySelector(s),
     player = $('#offline-player'),
     status = $('#offline-status'),
     saveState = $('#offline-save');
+  const position = createOfflinePosition(player, () => asset?.duration ?? 0);
   function message(text, error = false) {
     if (disposed) return;
     status.textContent = text;
@@ -99,17 +104,19 @@ export function mountOfflineAnalysis(
   }
   function updateButtons() {
     const hasVideo = !!asset?.blob,
-      ready = player.readyState >= 2 && !player.seeking && hasVideo;
+      ready = position.ready() && hasVideo;
+    player.controls = !working && !position.pending();
     $('#offline-add').disabled = working || !ready;
     $('#offline-move').disabled = working || !ready || !selectedLabel;
-    $('#offline-extract').disabled = working || !hasVideo;
+    $('#offline-extract').disabled = working || !ready;
+    container.querySelectorAll('#offline-timeline button, #offline-marker-choices button').forEach(b => b.disabled = working || !hasVideo);
     $('#offline-replay').disabled = working || !cache;
     $('#offline-compare').disabled = working || dirty || !cache || !annotations?.complete;
     $('#offline-export').disabled = working || !cache;
     $('#offline-remove-video').disabled = working || !hasVideo;
     $('#offline-complete').disabled = working || !asset;
     $('#offline-start').disabled = working || !ready;
-    $('#offline-seek').disabled = working || !ready;
+    $('#offline-seek').disabled = working || !hasVideo || player.readyState < 1;
     container
       .querySelectorAll('[data-offline-skip]')
       .forEach((b) => (b.disabled = working || !ready));
@@ -142,6 +149,8 @@ export function mountOfflineAnalysis(
       controller = null;
       if (!disposed) {
         $('#offline-progress-area').hidden = true;
+        analysisPhase = null;
+        if (annotations) renderShots();
         lock(false);
       }
     }
@@ -178,13 +187,16 @@ export function mountOfflineAnalysis(
     if (run) cache = caches.find((c) => c.id === run.cacheId) ?? cache;
     annotations = await getOfflineAnnotations(id);
     selectedLabel = null;
+    selectedCandidate = null;
     benchmark = null;
+    analysisPhase = null;
     clearExport();
     windowRange = null;
     overlayFrames = [];
     overlayEpoch++;
     if (videoURL) URL.revokeObjectURL(videoURL);
     videoURL = null;
+    position.reset();
     player.pause();
     player.removeAttribute('src');
     player.load();
@@ -199,6 +211,9 @@ export function mountOfflineAnalysis(
       $('#offline-type').value = run.metadata.shotType;
     }
     $('#offline-workspace').hidden = false;
+    $('#offline-source').open = false;
+    $('#offline-analysis-step').open = !run;
+    analysisPhase = null;
     $('#offline-title').textContent = asset.title;
     container
       .querySelector('.offline-stage')
@@ -251,12 +266,15 @@ export function mountOfflineAnalysis(
   function renderShots() {
     if (!annotations) return;
     const c = annotationCounts(annotations, run);
-    $('#offline-counts').textContent =
-      `自動候補 ${c.automatic}本 · 手動追加 ${c.manual}本 · 誤検出として除外 ${c.excluded}本 · 確認した正解 ${c.confirmed}本`;
+    $('#offline-counts').innerHTML = `<span>自動検出候補 <strong>${c.automatic}本</strong></span><span>手動追加 <strong>${c.manual}本</strong></span><span>確認済み正解 <strong>${c.confirmed}本</strong></span>`;
+    $('#offline-analysis-state').textContent = analysisPhase ?? (run ? `解析済み · 自動候補は正解と未確定（除外 ${c.excluded}本）` : cache ? '骨格の解析済み · 次は「骨格を使って再解析」' : '解析前 · ②で骨格を解析（先に手動登録もできます）');
+    renderTimeline();
+    renderCandidateSelection();
     $('#offline-complete').checked = annotations.complete;
     const labels = [...activeLabels(annotations)].sort((a, b) => a.time - b.time);
+    const listOpen = $('#offline-shots>details')?.open ?? false;
     $('#offline-shots').innerHTML =
-      `<h3>確認したシュート · ${labels.length}本</h3><div class="offline-shot-list">${labels.map((l, i) => `<button type="button" class="secondary${selectedLabel === l.id ? ' active' : ''}" data-offline-label="${escape(l.id)}">${i + 1} · ${seconds(l.time)}${l.origin === 'manual' ? ' 手動' : ''}${l.timeCorrected ? ' 修正' : ''}</button>`).join('') || '<p>0本でも手動で追加できます。</p>'}</div><details class="app-help"${run?.shots.length ? ' open' : ''}><summary>自動候補 · ${run?.shots.length ?? 0}本（正解とは未確定）</summary>${(
+      `<details class="app-help"${listOpen ? ' open' : ''}><summary>登録済みの一覧・自動候補の確認</summary><h3>確認したシュート · ${labels.length}本</h3><div class="offline-shot-list">${labels.map((l, i) => `<button type="button" class="secondary${selectedLabel === l.id ? ' active' : ''}" data-offline-label="${escape(l.id)}">${i + 1} · ${seconds(l.time)}${l.origin === 'manual' ? ' 手動' : ''}${l.timeCorrected ? ' 修正' : ''}</button>`).join('') || '<p>0本でも手動で追加できます。</p>'}</div><details class="app-help"${run?.shots.length ? ' open' : ''}><summary>自動候補 · ${run?.shots.length ?? 0}本（正解とは未確定）</summary>${(
         run?.shots ?? []
       )
         .map((s) => {
@@ -265,7 +283,8 @@ export function mountOfflineAnalysis(
             near = labels.some((l) => Math.abs(l.time - s.phases.release) < 0.5);
           return `<article class="offline-candidate"><button type="button" class="secondary" data-offline-candidate="${escape(s.id)}">${s.number} · ${seconds(s.phases.release)}</button><span>${rejected ? '誤検出として除外' : near ? '確認した位置に近い' : '要確認'} · フォーム一致度 ${s.evaluation?.comparison.overall ?? '—'}${s.evaluation?.comparison.confidence === 'Low' ? '（参考値）' : ''}</span><div><button type="button" class="primary" data-offline-confirm="${escape(s.id)}"${rejected || near ? ' disabled' : ''}>正解に登録</button><button type="button" class="secondary" data-offline-reject="${escape(s.id)}">${rejected ? '除外を取り消す' : '誤検出'}</button></div><details><summary>判定理由</summary><p>${escape(s.reason)}</p><p>${escape(s.analysis.warnings.join(' '))}</p></details></article>`;
         })
-        .join('')}</details>`;
+        .join('')}</details></details>`;
+    updateButtons();
   }
   async function apply(action) {
     if (!asset || !annotations || working) return;
@@ -283,6 +302,7 @@ export function mountOfflineAnalysis(
       annotations = await saveOfflineAnnotations(next, previous.revision);
       markDirty(false);
       benchmark = null;
+      analysisPhase = null;
       clearExport();
       saveState.textContent = `ローカル保存・読み戻し確認済み（修正 ${annotations.revision} / ${date(annotations.updatedAt)}）`;
       if (action.type === 'add') selectedLabel = annotations.items.at(-1).id;
@@ -297,8 +317,9 @@ export function mountOfflineAnalysis(
       renderShots();
       renderMetrics();
       if (selectedLabel) await showLabel(selectedLabel, false);
+      message('');
     } catch (error) {
-      saveState.textContent = '保存に失敗しました。保存済みとは確認できません。';
+      saveState.textContent = `登録・保存しませんでした。${msgError(error)}`;
       saveState.className = 'error';
       message(msgError(error), true);
       if (action.type === 'complete') $('#offline-complete').checked = annotations.complete;
@@ -312,7 +333,9 @@ export function mountOfflineAnalysis(
     if (dirty && selectedLabel !== id && !confirm('未保存の確認を破棄しますか？')) return;
     markDirty(false);
     selectedLabel = id;
+    selectedCandidate = null;
     $('#offline-label-editor').hidden = false;
+    $('#offline-label-editor').open = seek;
     $('#offline-outcome').value = item.outcome;
     $('#offline-form-rating').value = item.formRating;
     $('#offline-note').value = item.note;
@@ -385,19 +408,101 @@ export function mountOfflineAnalysis(
     };
   }
   function seekTo(time) {
-    if (!asset?.blob) return;
-    player.pause();
-    player.currentTime = Math.max(0, Math.min(asset.duration - 0.001, time));
+    if (!asset?.blob || working) return;
+    position.seek(time);
     updatePosition();
+    updateButtons();
   }
   function updatePosition() {
     if (disposed) return;
-    $('#offline-position').textContent = seconds(player.currentTime || 0);
-    $('#offline-seek').value = player.currentTime || 0;
+    const time = position.displayTime();
+    $('#offline-position').textContent = `${seconds(time)}${position.pending() ? ' · 読込中' : ''}`;
+    $('#offline-seek').value = time;
+    $('#offline-timeline').style.setProperty('--offline-fraction', String(asset?.duration ? time / asset.duration : 0));
     void updateOverlay();
   }
+  function registerPosition(type) {
+    // Capture media seconds before any asynchronous save; never save a stale pre-seek frame.
+    if (!asset?.blob || working || !position.ready()) {
+      message('移動先の映像を読み込み中です。表示が落ち着いてから登録してください。', true);
+      return;
+    }
+    player.pause();
+    const time = player.currentTime;
+    void apply({ type, ...(type === 'move' ? { id: selectedLabel } : {}), time });
+  }
+  function renderTimeline() {
+    if (!annotations || !asset) return;
+    const width = $('#offline-truth-markers').clientWidth || 240;
+    const truth = [...activeLabels(annotations)].sort((a,b) => a.time - b.time);
+    const automatic = (run?.shots ?? []).map(s => ({ id:s.id, time:s.phases.release, origin:'candidate', number:s.number,
+      excluded:annotations.decisions[`${run.id}:${s.id}`]?.decision === 'false-positive' }));
+    for (const [name, entries] of [['truth', truth], ['auto', automatic]]) {
+      $('#offline-' + name + '-markers').innerHTML = entries.map(entry=>`<span aria-hidden="true" class="offline-marker-tick ${name} ${entry.origin}${entry.id===selectedLabel && name==='truth' ? ' selected' : ''}" data-marker-time="${entry.time}" data-marker-id="${escape(entry.id)}" style="left:${entry.time / asset.duration * 100}%"></span>`).join('') + groupTimelineMarkers(entries, asset.duration, width).map(group => {
+        const first=group[0], multiple=group.length>1,
+          label = name === 'auto' ? '自動候補' : first.origin === 'manual' ? '手動・確認済み' : '確認済み';
+        return `<button type="button" class="offline-marker ${name} ${multiple ? 'group' : first.origin} ${!multiple && first.excluded ? 'excluded' : ''}${group.some(i=>i.id===selectedLabel) && name==='truth' ? ' selected' : ''}" style="left:${first.time / asset.duration * 100}%" data-marker-kind="${name}" data-marker-ids="${escape(group.map(i=>i.id).join(','))}" aria-label="${label} ${seconds(first.time)}${multiple ? ` ほか${group.length-1}本・一覧を開く` : ''}" title="${label} ${seconds(first.time)}">${multiple ? group.length : name==='auto' ? '◆' : '●'}</button>`;
+      }).join('');
+    }
+    // Choices from the previous revision must not keep cancelled or moved entries alive.
+    $('#offline-marker-choices').hidden = true;
+    $('#offline-marker-choices').replaceChildren();
+    updatePosition();
+  }
+  function renderCandidateSelection() {
+    const area=$('#offline-candidate-selection'), shot=run?.shots.find(s=>s.id===selectedCandidate);
+    area.hidden=!shot;
+    if (!shot) return;
+    const rejected=annotations.decisions[`${run.id}:${shot.id}`]?.decision==='false-positive';
+    area.innerHTML=`<span>自動候補 ${shot.number} · ${seconds(shot.phases.release)} · ${rejected ? '除外済み' : '未確定'}</span><button type="button" class="primary" data-offline-confirm="${escape(shot.id)}">正解に登録</button><button type="button" class="secondary" data-offline-reject="${escape(shot.id)}">${rejected ? '除外を取り消す' : '誤検出'}</button>`;
+    updateButtons();
+  }
+  function activateMarker(kind, id) {
+    if (kind === 'truth') void showLabel(id);
+    else {
+      const shot=run?.shots.find(s=>s.id===id);
+      if (shot) {
+        if (dirty) return message('先に入力中の確認を保存してください。', true);
+        selectedLabel=null;
+        $('#offline-label-editor').hidden=true;
+        selectedCandidate=id;
+        renderShots();
+        seekTo(shot.phases.release);
+      }
+    }
+  }
+  $('#offline-timeline').onclick = event => {
+    const b=event.target.closest('[data-marker-ids]');
+    if (working || !asset?.blob) return;
+    if (!b) {
+      const track=event.target.closest('.offline-marker-track');
+      if (!track) return;
+      const rect=track.getBoundingClientRect(), time=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width))*asset.duration;
+      const kind=track.id==='offline-truth-markers' ? 'truth' : 'auto';
+      const entries=kind==='truth' ? activeLabels(annotations) : (run?.shots ?? []).map(s=>({...s,time:s.phases.release}));
+      const nearest=entries.reduce((a,e)=>!a || Math.abs(e.time-time)<Math.abs(a.time-time) ? e : a,null);
+      if(nearest && Math.abs(nearest.time-time)/asset.duration*rect.width<=22) activateMarker(kind,nearest.id);
+      else seekTo(time);
+      return;
+    }
+    const ids=b.dataset.markerIds.split(','), kind=b.dataset.markerKind;
+    if (ids.length===1) return activateMarker(kind,ids[0]);
+    const entries=kind==='truth' ? activeLabels(annotations) : (run?.shots ?? []).map(s=>({...s,time:s.phases.release}));
+    const choices=$('#offline-marker-choices');
+    choices.hidden=false;
+    choices.innerHTML=`<span>近い位置の${kind==='truth' ? '確認済みシュート' : '自動候補'}を選択</span>`+ids.map(id=> {
+      const entry=entries.find(i=>i.id===id);
+      return `<button type="button" class="secondary" data-choice-kind="${kind}" data-choice-id="${escape(id)}">${seconds(entry.time)}</button>`;
+    }).join('');
+  };
+  $('#offline-marker-choices').onclick = event => {
+    const b=event.target.closest('[data-choice-id]');
+    if (b && !working) activateMarker(b.dataset.choiceKind,b.dataset.choiceId);
+  };
+  const timelineResize = new ResizeObserver(() => { if (annotations) renderTimeline(); });
+  timelineResize.observe($('#offline-truth-markers'));
   async function updateOverlay() {
-    if (working || player.seeking || !cache || !asset?.blob) return;
+    if (working || position.pending() || player.seeking || !cache || !asset?.blob) return;
     const time = player.currentTime;
     if (!windowRange || time < windowRange.start || time > windowRange.end) {
       const epoch = ++overlayEpoch,
@@ -411,6 +516,7 @@ export function mountOfflineAnalysis(
         overlayFrames = [];
       }
     }
+    if (position.pending() || player.seeking || Math.abs(player.currentTime-time) > .025) return;
     drawPose(
       $('#offline-bones'),
       player,
@@ -512,7 +618,9 @@ export function mountOfflineAnalysis(
   $('#offline-caches').onchange = () => {
     cache = caches.find((c) => c.id === $('#offline-caches').value) ?? null;
     run = runs.find((r) => r.cacheId === cache?.id) ?? null;
+    selectedCandidate = null;
     benchmark = null;
+    analysisPhase = null;
     clearExport();
     overlayEpoch++;
     windowRange = null;
@@ -523,6 +631,7 @@ export function mountOfflineAnalysis(
   };
   $('#offline-runs').onchange = () => {
     run = runs.find((r) => r.id === $('#offline-runs').value) ?? null;
+    selectedCandidate = null;
     if (run?.metadata) {
       $('#offline-hand').value = run.metadata.hand;
       $('#offline-angle').value = run.metadata.cameraAngle;
@@ -533,6 +642,8 @@ export function mountOfflineAnalysis(
   };
   $('#offline-extract').onclick = () =>
     void task(async (signal) => {
+      analysisPhase = '解析中 · 骨格を読み取っています（保存済みの正解は保持）';
+      renderShots();
       cache = await extractOfflinePose(player, asset, {
         fps: Number($('#offline-fps').value),
         force: true,
@@ -551,6 +662,8 @@ export function mountOfflineAnalysis(
     });
   $('#offline-replay').onclick = () =>
     void task(async (signal) => {
+      analysisPhase = '解析中 · シュート候補を探しています';
+      renderShots();
       run = await runOfflineAnalysis(asset, cache, {
         metadata: currentMetadata(),
         reference: getReference(),
@@ -560,6 +673,7 @@ export function mountOfflineAnalysis(
         onProgress: progress,
       });
       runs.unshift(run);
+      $('#offline-analysis-step').open = false;
       clearExport();
       renderOptions();
       renderShots();
@@ -567,9 +681,9 @@ export function mountOfflineAnalysis(
         `${run.shots.length}本の自動候補を保存しました。見逃しは動画の位置から追加できます。以前の修正は保持しています。`
       );
     });
-  $('#offline-add').onclick = () => void apply({ type: 'add', time: player.currentTime });
+  $('#offline-add').onclick = () => registerPosition('add');
   $('#offline-move').onclick = () =>
-    selectedLabel && void apply({ type: 'move', id: selectedLabel, time: player.currentTime });
+    selectedLabel && registerPosition('move');
   $('#offline-save-label').onclick = () =>
     selectedLabel &&
     void apply({
@@ -586,14 +700,14 @@ export function mountOfflineAnalysis(
     void apply({ type: 'complete', value: $('#offline-complete').checked });
   for (const id of ['#offline-outcome', '#offline-form-rating', '#offline-note'])
     $(id).addEventListener('input', () => markDirty(true));
-  $('#offline-shots').onclick = (event) => {
+  const handleCandidate = (event) => {
     const b = event.target.closest('button');
     if (!b || working) return;
     if (b.dataset.offlineLabel) return void showLabel(b.dataset.offlineLabel);
     const id = b.dataset.offlineCandidate ?? b.dataset.offlineConfirm ?? b.dataset.offlineReject,
       shot = run?.shots.find((s) => s.id === id);
     if (!shot) return;
-    if (b.dataset.offlineCandidate) seekTo(shot.phases.release);
+    if (b.dataset.offlineCandidate) activateMarker('auto', shot.id);
     else if (b.dataset.offlineConfirm)
       void apply({
         type: 'add',
@@ -610,6 +724,8 @@ export function mountOfflineAnalysis(
         value: annotations.decisions[`${run.id}:${shot.id}`]?.decision !== 'false-positive',
       });
   };
+  $('#offline-shots').onclick = handleCandidate;
+  $('#offline-candidate-selection').onclick = handleCandidate;
   $('#offline-compare').onclick = () =>
     void task(async (signal) => {
       const selectedCache = cache,
@@ -676,7 +792,7 @@ export function mountOfflineAnalysis(
   $('#offline-start').onclick = () => seekTo(0);
   container
     .querySelectorAll('[data-offline-skip]')
-    .forEach((b) => (b.onclick = () => seekTo(player.currentTime + Number(b.dataset.offlineSkip))));
+    .forEach((b) => (b.onclick = () => seekTo(position.displayTime() + Number(b.dataset.offlineSkip))));
   $('#offline-seek').oninput = () => seekTo(Number($('#offline-seek').value));
   $('#offline-cancel').onclick = () => controller?.abort();
   player.addEventListener('loadeddata', () => {
@@ -686,6 +802,7 @@ export function mountOfflineAnalysis(
   player.addEventListener('timeupdate', updatePosition);
   player.addEventListener('seeking', updateButtons);
   player.addEventListener('seeked', () => {
+    position.settle();
     updatePosition();
     updateButtons();
   });
@@ -696,6 +813,7 @@ export function mountOfflineAnalysis(
     frameCallback = null;
   });
   player.addEventListener('error', () => {
+    position.reset();
     if (asset?.blob) {
       message('保存した動画を再生できません。骨格・修正は保持しています。', true);
       updateButtons();
@@ -715,6 +833,7 @@ export function mountOfflineAnalysis(
   void refreshAssets().catch((e) => message(msgError(e), true));
   return () => {
     disposed = true;
+    timelineResize.disconnect();
     controller?.abort();
     onBusy(false);
     player.pause();

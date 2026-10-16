@@ -131,6 +131,7 @@ try {
       async close() {}
     };
   });
+  await page.locator('#offline-source').evaluate(e=>e.open=true);
   await page.locator('#offline-upload').setInputFiles(fixture);
   await page.waitForFunction(() =>
     document.querySelector('#offline-status').textContent.includes('内容を照合')
@@ -157,17 +158,58 @@ try {
     );
   }
   for (let i = 0; i < 10; i++) {
-    await seek(0.5 + i);
+    if (i === 1) {
+      // Reproduce delayed media state: the old position is still reported after a seek request.
+      const pending = await page.evaluate(() => {
+        const v=document.querySelector('#offline-player'), slider=document.querySelector('#offline-seek');
+        const old=v.currentTime;
+        Object.defineProperty(v,'currentTime',{configurable:true,get:()=>old,set:t=>{window.pendingMediaTime=t;}});
+        Object.defineProperty(v,'seeking',{configurable:true,get:()=>false});
+        slider.value='1.5';slider.dispatchEvent(new Event('input',{bubbles:true}));
+        const b=document.querySelector('#offline-add');
+        b.click(); // must not register old 0.5s or trigger a misleading proximity error
+        v.dispatchEvent(new Event('timeupdate'));v.dispatchEvent(new Event('seeked'));
+        return {disabled:b.disabled,shown:document.querySelector('#offline-position').textContent,range:slider.value};
+      });
+      assert.equal(pending.disabled,true);
+      assert.match(pending.shown,/0:01.50.*読込中/);
+      assert.equal(pending.range,'1.5');
+      assert.doesNotMatch(await page.locator('#offline-status').textContent(),/近く/);
+      await page.evaluate(()=>{const v=document.querySelector('#offline-player');delete v.currentTime;delete v.seeking;v.currentTime=window.pendingMediaTime;});
+      await page.waitForFunction(()=>!document.querySelector('#offline-add').disabled);
+    } else await seek(0.5 + i);
     await page.locator('#offline-add').click();
     await page.waitForFunction(
       (n) =>
         document
           .querySelector('#offline-counts')
-          .textContent.includes('確認した正解 ' + n + '本') &&
+          .textContent.includes('確認済み正解 ' + n + '本') &&
         document.querySelector('#offline-save').textContent.includes('読み戻し確認済み'),
       i + 1
     );
   }
+  // A real duplicate is rejected with both positions, without changing saved truth.
+  await seek(9.7); await page.locator('#offline-add').click();
+  await page.waitForFunction(()=>document.querySelector('#offline-status').textContent.includes('0:09.70'));
+  assert.match(await page.locator('#offline-status').textContent(),/0:09.70.*0:09.50.*0.20秒/);
+  assert.match(await page.locator('#offline-counts').textContent(),/確認済み正解 10本/);
+  assert.ok(await page.locator('#offline-truth-markers button').count()>0);
+  assert.equal(await page.locator('#offline-auto-markers button').count(),0);
+  // Marker group targets never overlap and every member remains selectable.
+  const registered=await page.evaluate(async id=>(await import('/src/offline-storage.js')).getOfflineAnnotations(id),assetId);
+  const firstId=registered.items[0].id,lastId=registered.items[9].id;
+  async function marker(id){
+    const b=page.locator(`#offline-truth-markers [data-marker-ids*="${id}"]`);
+    await b.click();
+    const choice=page.locator(`[data-choice-id="${id}"]`);
+    if(await choice.isVisible())await choice.click();
+    await page.waitForFunction(()=>!document.querySelector('#offline-add').disabled);
+  }
+  await marker(firstId);
+  assert.ok(Math.abs(await page.locator('#offline-player').evaluate(v=>v.currentTime)-.5)<.025);
+  await marker(lastId);
+  assert.ok(Math.abs(await page.locator('#offline-player').evaluate(v=>v.currentTime)-9.5)<.025);
+  await page.locator('#offline-label-editor').evaluate(e=>e.open=true);
   await page.locator('#offline-outcome').selectOption('missed');
   await page.locator('#offline-form-rating').selectOption('bad');
   await page.locator('#offline-note').fill('手動の確認メモ');
@@ -180,15 +222,21 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('[data-offline-label].active')?.textContent.includes('10.50')
   );
+  assert.equal(await page.locator(`#offline-truth-markers [data-marker-id="${lastId}"]`).getAttribute('data-marker-time'),'10.5');
+  await marker(lastId);
+  assert.ok(Math.abs(await page.locator('#offline-player').evaluate(v=>v.currentTime)-10.5)<.025);
+  await page.locator('#offline-label-editor').evaluate(e=>e.open=true);
   await page.locator('#offline-remove-label').click();
   await page.waitForFunction(() =>
-    document.querySelector('#offline-counts').textContent.includes('確認した正解 9本')
+    document.querySelector('#offline-counts').textContent.includes('確認済み正解 9本')
   );
+  assert.equal(await page.locator(`#offline-truth-markers [data-marker-ids*="${lastId}"]`).count(),0);
   await seek(10.5);
   await page.locator('#offline-add').click();
   await page.waitForFunction(() =>
-    document.querySelector('#offline-counts').textContent.includes('確認した正解 10本')
+    document.querySelector('#offline-counts').textContent.includes('確認済み正解 10本')
   );
+  await page.locator('#offline-analysis-step').evaluate(e=>e.open=true);
   await page.locator('#offline-extract').click();
   await page.waitForFunction(
     () => document.querySelector('#offline-status').textContent.includes('骨格の読み取りを保存'),
@@ -198,11 +246,12 @@ try {
   const sent = await page.evaluate(() => window.poseSendCount);
   console.log('extraction', sent, await page.locator('#offline-cache-info').textContent());
   assert.ok(sent >= 200);
+  await page.locator('#offline-analysis-step').evaluate(e=>e.open=true);
   await page.locator('#offline-replay').click();
   await page.waitForFunction(() =>
     document.querySelector('#offline-status').textContent.includes('自動候補を保存')
   );
-  assert.match(await page.locator('#offline-counts').textContent(), /確認した正解 10本/);
+  assert.match(await page.locator('#offline-counts').textContent(), /確認済み正解 10本/);
   assert.equal(
     await page.evaluate(() => window.poseSendCount),
     sent,
@@ -223,6 +272,20 @@ try {
   assert.equal(before.runs[0].referenceId, null);
   assert.ok(before.runs[0].shots.length > 0);
   assert.equal(before.runs[0].shots[0].evaluation, null);
+  assert.match(await page.locator('#offline-counts').textContent(), new RegExp('自動検出候補 '+before.runs[0].shots.length+'本'));
+  assert.match(await page.locator('#offline-analysis-state').textContent(),/解析済み/);
+  const automaticId=before.runs[0].shots[0].id;
+  await page.locator(`#offline-auto-markers [data-marker-ids*="${automaticId}"]`).click();
+  const autoChoice=page.locator(`[data-choice-id="${automaticId}"]`);
+  if(await autoChoice.isVisible())await autoChoice.click();
+  await page.waitForSelector('#offline-candidate-selection:not([hidden])');
+  assert.match(await page.locator('#offline-candidate-selection').textContent(),/自動候補/);
+  await page.locator('#offline-candidate-selection [data-offline-reject]').click();
+  await page.waitForFunction(()=>document.querySelector('#offline-candidate-selection').textContent.includes('除外済み'));
+  assert.match(await page.locator('#offline-counts').textContent(),/手動追加 10本.*確認済み正解 10本/);
+  await page.locator('#offline-candidate-selection [data-offline-reject]').click();
+  await page.waitForFunction(()=>document.querySelector('#offline-candidate-selection').textContent.includes('未確定'));
+  await page.locator('#offline-comparison-step').evaluate(e=>e.open=true);
   await page.locator('#offline-complete').check();
   await page.waitForFunction(() => document.querySelector('#offline-compare').disabled === false);
   await page.locator('#offline-compare').click();
@@ -245,6 +308,7 @@ try {
   assert.equal(json.poseChunks.length, before.caches[0].chunkCount);
   assert.equal('blob' in json.asset, false);
   // Re-import is content-deduplicated and does not discard labels/cache/runs.
+  await page.locator('#offline-source').evaluate(e=>e.open=true);
   await page.locator('#offline-upload').setInputFiles(fixture);
   await page.waitForFunction(() =>
     document.querySelector('#offline-status').textContent.includes('内容を照合')
@@ -268,7 +332,7 @@ try {
     { width: 844, height: 390 },
   ]) {
     await page.setViewportSize(size);
-    await page.locator('.offline-stage').scrollIntoViewIfNeeded();
+    await page.locator('.offline-review-deck').evaluate(e=>e.scrollIntoView({block:'start'}));
     assert.equal(
       await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
       false
@@ -278,15 +342,29 @@ try {
         Math.max(270, size.height * 0.43) + 1
     );
     assert.ok((await page.locator('#offline-add').boundingBox()).height >= 44);
+    for (const lane of ['truth','auto']) {
+      const boxes=await page.locator(`#offline-${lane}-markers button`).evaluateAll(bs=>bs.map(b=>{const r=b.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width};}));
+      assert.ok(boxes.every(b=>b.width>=44));
+      for(let i=1;i<boxes.length;i++)assert.ok(boxes[i].left >= boxes[i-1].right - 1);
+    }
+    await page.screenshot({path:`/workspace/work/pr41-review-${size.width}x${size.height}.png`});
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await page.locator('.other-menu>summary').click();
   await page.locator('[data-page=offline]').click();
+  await page.locator('#offline-source').evaluate(e=>e.open=true);
   await page.locator('#offline-assets').selectOption(assetId);
   await page.waitForFunction(() =>
-    document.querySelector('#offline-counts').textContent.includes('確認した正解 10本')
+    document.querySelector('#offline-counts').textContent.includes('確認済み正解 10本')
   );
+  const restored=await page.evaluate(async id=>(await import('/src/offline-storage.js')).getOfflineAnnotations(id),assetId);
+  const markerIDs=await page.locator('#offline-truth-markers [data-marker-ids]').evaluateAll(bs=>bs.flatMap(b=>b.dataset.markerIds.split(',')));
+  assert.deepEqual(markerIDs.sort(),restored.items.filter(i=>i.active!==false).map(i=>i.id).sort());
+  const ticks=await page.locator('#offline-truth-markers [data-marker-time]').evaluateAll(bs=>bs.map(b=>({id:b.dataset.markerId,time:Number(b.dataset.markerTime)})));
+  assert.deepEqual(ticks.sort((a,b)=>a.time-b.time),restored.items.filter(i=>i.active!==false).map(({id,time})=>({id,time})).sort((a,b)=>a.time-b.time));
+  await marker(firstId);
+  assert.ok(Math.abs(await page.locator('#offline-player').evaluate(v=>v.currentTime)-.5)<.025);
   assert.equal(await page.locator('#offline-complete').isChecked(), true);
   assert.match(await page.locator('#offline-save').textContent(), /読み戻し確認済み/);
   // Stale revision must fail without overwriting saved labels.
@@ -444,8 +522,10 @@ try {
   await page.reload();
   await page.locator('.other-menu>summary').click();
   await page.locator('[data-page=offline]').click();
+  await page.locator('#offline-source').evaluate(e=>e.open=true);
   await page.locator('#offline-assets').selectOption(assetId);
   await page.waitForFunction(() => document.querySelector('[data-offline-label]'));
+  await page.locator('#offline-shots>details').evaluate(e=>e.open=true);
   await page.locator('[data-offline-label]').first().click();
   await page.waitForFunction(() =>
     document.querySelector('#offline-label-analysis').textContent.includes('参考計算')
@@ -474,6 +554,7 @@ try {
   );
   assert.equal(await page.locator('#offline-add').isDisabled(), true);
   assert.equal(await page.locator('#offline-replay').isDisabled(), false);
+  await page.locator('#offline-analysis-step').evaluate(e=>e.open=true);
   await page.locator('#offline-replay').click();
   await page.waitForFunction(() =>
     document.querySelector('#offline-status').textContent.includes('自動候補を保存')

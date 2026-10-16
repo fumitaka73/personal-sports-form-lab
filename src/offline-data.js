@@ -72,10 +72,11 @@ export function changeAnnotations(
     const time = Number(action.time);
     if (!Number.isFinite(time) || time < 0 || time > duration)
       throw new Error('動画の範囲内でリリースの瞬間を指定してください。');
-    if (activeLabels(next).some((i) => i.id !== action.id && Math.abs(i.time - time) < 0.5))
-      throw new Error(
-        '近くに確認済みのシュートがあります。同じシュートなら「位置を修正」を使ってください。'
-      );
+    const near = activeLabels(next).find((i) => i.id !== action.id && Math.abs(i.time - time) < 0.5);
+    if (near) {
+      const position = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`;
+      throw new Error(`追加・修正する位置 ${position(time)} の近くに、確認済みのシュート ${position(near.time)} があります（差 ${Math.abs(near.time - time).toFixed(2)}秒・0.5秒未満）。同じシュートなら登録済みマーカーを選び「位置を修正」を使ってください。`);
+    }
     if (action.type === 'add')
       next.items.push({
         id,

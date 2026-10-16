@@ -209,3 +209,50 @@ body{background:var(--app-bg)}.app-header{position:sticky;top:0;z-index:30;heigh
 @media(max-width:420px){.offline-metric-cards{grid-template-columns:1fr}}
 @media(orientation:landscape) and (max-height:520px){.offline-panel .offline-stage{width:min(100%,calc(min(42svh,220px)*var(--offline-ratio,1.777)));height:auto;min-height:0}.offline-review-actions{gap:6px}.offline-panel h2{font-size:1.1rem}}
 #offline-download-json{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;margin-top:8px;text-decoration:none;touch-action:manipulation}
+
+/* PR41 device review: one compact deck for video, counts, markers and release registration. */
+.offline-steps{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:#52604e;margin:8px 0}
+.offline-panel>details>summary,.offline-file-info>summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:13px}
+.offline-review-deck{padding:8px;border:1px solid #87987e55;border-radius:12px;background:var(--panel,#fff);min-width:0}
+.offline-counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:0;font-size:11px;line-height:1.4}
+.offline-counts span{display:grid;text-align:center;background:#eef3e9;border-radius:6px;padding:4px 1px;color:#263d2c}
+.offline-counts strong{font-size:17px}
+#offline-analysis-state{margin:5px 0;font-size:11px;line-height:1.4}
+.offline-release-help{font-size:11px;margin:4px 0}
+#offline-save{font-size:11px;line-height:1.4;margin:4px 0;overflow-wrap:anywhere;min-height:16px}
+.offline-review-deck .offline-stage{width:min(100%,calc(min(23svh,190px)*var(--offline-ratio,1.777)))}
+.offline-transport{margin:4px 0;gap:3px}
+.offline-transport button{padding:4px 6px;font-size:12px;min-width:44px}
+#offline-position{font-size:12px;white-space:nowrap;min-width:75px;text-align:center}
+.offline-timeline{position:relative;margin:0 22px 0 0;--offline-label-width:84px}
+.offline-timeline-lane{display:grid;grid-template-columns:var(--offline-label-width) minmax(0,1fr);align-items:center;min-width:0}
+.offline-timeline-lane>span{font-size:10px;line-height:1.3}
+.offline-timeline-lane small{display:block;font-size:9px}
+.offline-marker-track{height:44px;position:relative;background:linear-gradient(transparent 21px,#b7c1b4 21px,#b7c1b4 23px,transparent 23px)}
+.offline-marker{position:absolute;top:0;transform:translateX(-50%);width:44px;min-width:44px;height:44px;min-height:44px;padding:0;margin:0;background:transparent;border:0;box-shadow:none;font-size:16px;color:#476ca1;z-index:1}
+.offline-marker.manual{color:#197340}.offline-marker.group{font-size:13px;font-weight:800;background:radial-gradient(circle,#e1eadd 12px,transparent 13px)}
+.offline-marker.excluded{opacity:.45;text-decoration:line-through}.offline-marker.selected{outline:2px solid #197340;outline-offset:-6px;border-radius:12px}
+#offline-playhead{position:absolute;top:0;bottom:0;left:calc(var(--offline-label-width) + (100% - var(--offline-label-width))*var(--offline-fraction,0));width:2px;background:#cc4d19;pointer-events:none;z-index:2}
+.offline-marker-choices{display:flex;flex-wrap:wrap;gap:4px;font-size:11px}.offline-marker-choices>span{width:100%}.offline-marker-choices button{min-height:44px;padding:5px}
+.offline-seek-label{font-size:11px;margin:0}.offline-seek-label input{min-height:32px;margin:0;width:100%}
+.offline-analysis-actions{display:flex;gap:6px;flex-wrap:wrap}.offline-analysis-actions button{min-height:44px;font-size:13px;flex:1;padding:8px}
+.offline-panel #offline-title{font-size:13px;margin:8px 0 0;overflow-wrap:anywhere}.offline-file-info summary{min-height:30px}
+@media(max-height:650px) and (orientation:portrait){.offline-review-deck .offline-stage{width:min(100%,calc(20svh*var(--offline-ratio,1.777)))}}
+@media(orientation:landscape) and (max-height:540px){
+ .offline-review-deck{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;align-items:start}
+ .offline-visual,.offline-controls{min-width:0}
+ .offline-review-deck .offline-stage{width:min(100%,calc(40svh*var(--offline-ratio,1.777)));max-height:40svh}
+ .offline-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 6px}
+ .offline-controls .offline-transport{grid-column:1/-1;grid-row:1}
+ .offline-controls .offline-timeline{grid-column:1;grid-row:2;--offline-label-width:57px;margin-right:12px}
+ .offline-controls .offline-review-actions{grid-column:2;grid-row:2;grid-template-columns:1fr;gap:3px}
+ .offline-controls .offline-review-actions button{min-height:44px;padding:3px;font-size:11px}
+ .offline-controls .offline-seek-label{grid-column:1/-1;grid-row:3}
+ .offline-controls .offline-candidate-selection{grid-column:1/-1;grid-row:4}
+ .offline-controls .offline-marker-choices,.offline-controls .offline-release-help,.offline-controls #offline-save{grid-column:1/-1}
+ .offline-controls .offline-release-help{font-size:10px;margin:2px 0}
+ .offline-controls #offline-save{font-size:10px;margin:2px 0}
+}
+.offline-candidate-selection{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:4px 0;font-size:12px}.offline-candidate-selection span{flex:1;min-width:90px;font-size:11px}.offline-candidate-selection button{min-height:44px;font-size:12px;padding:5px 8px}
+
+.offline-marker-tick{position:absolute;top:15px;width:2px;height:14px;background:#476ca1;pointer-events:none;transform:translateX(-50%)}.offline-marker-tick.manual{background:#197340}.offline-marker-tick.selected{top:10px;height:24px;width:4px;background:#197340}

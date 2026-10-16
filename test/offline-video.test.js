@@ -252,3 +252,19 @@ test('rejecting a previously confirmed automatic candidate removes only its link
   assert.equal(a.items.length, 2);
   assert.equal(a.history.length, 3);
 });
+
+test('0.5-second proximity guard uses only active final truth, reports both media positions and keeps boundary allowed', () => {
+  let a = emptyAnnotations(assetId);
+  a = changeAnnotations(a, { type:'add', time:1 }, { id:'one',duration:20 });
+  const before=structuredClone(a);
+  assert.throws(() => changeAnnotations(a, {type:'add',time:1.2}, {duration:20}), /0:01\.20.*0:01\.00.*0\.20秒/);
+  assert.deepEqual(a,before);
+  a = changeAnnotations(a, {type:'add',time:1.5}, {id:'boundary',duration:20});
+  a = changeAnnotations(a, {type:'add',time:12}, {id:'two',duration:20});
+  a = changeAnnotations(a, {type:'move',id:'two',time:12.2}, {duration:20});
+  a = changeAnnotations(a, {type:'edit',id:'one',active:false}, {duration:20});
+  a = changeAnnotations(a, {type:'add',time:1}, {id:'replacement',duration:20});
+  assert.deepEqual(activeLabels(a).map(l=>l.time), [1.5,12.2,1]);
+  // An unconfirmed automatic candidate is not a duplicate manual truth.
+  assert.equal(annotationCounts(a,{id:'r',shots:[{id:'auto',phases:{release:1}}]}).automatic,1);
+});

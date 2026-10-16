@@ -3,7 +3,7 @@ const measurements='psfl-pr41-test-measurements';
 const elapsed=ms=>`${Math.floor(ms/60000)}分${Math.floor(ms/1000)%60}秒`;
 let started=null;
 const bar=document.createElement('section');bar.className='iphone-test-bar';bar.setAttribute('aria-label','PR41テスト環境');
-bar.innerHTML='<div><strong>PR41 テスト版</strong><button type="button" id="iphone-open-video">動画を試す</button><a href="./iphone-test.html" target="_blank" rel="noopener">確認手順</a></div><small>本番とは別の保存先 · 動画の外部送信なし</small><p id="iphone-elapsed" role="status" hidden></p><button id="iphone-copy-result" type="button" hidden>所要時間をコピー</button>';
+bar.innerHTML='<div><strong>PR41 テスト版 · 登録位置修正版</strong><button type="button" id="iphone-open-video">動画を試す</button><a href="./iphone-test.html" target="_blank" rel="noopener">確認手順</a></div><small>本番とは別の保存先 · 動画の外部送信なし</small><p id="iphone-elapsed" role="status" hidden></p><button id="iphone-copy-result" type="button" hidden>所要時間をコピー</button>';
 const attach=()=>{const header=document.querySelector('.app-header');if(!header)return false;header.after(bar);document.querySelector('.app-name').textContent='SPORTS FORM LAB · テスト版';return true;};
 if(!attach()){const timer=setInterval(()=>{if(attach())clearInterval(timer);},100);}
 const output=bar.querySelector('#iphone-elapsed'),copy=bar.querySelector('#iphone-copy-result');
