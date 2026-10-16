@@ -2,6 +2,8 @@
 
 v0.23.0：保存した動画の読み込み・骨格キャッシュ・手動正解・反復比較の使い方は [動画のオフライン再解析](docs/issue-40-offline-video.md) を参照してください。従来のライブ練習と保存データは維持します。
 
+PR #41の本人限定テストURL・iPhone操作手順は [実機テスト環境](docs/pr41-iphone-test.md) を参照してください。本番GitHub Pagesとは別の保存領域です。
+
 v0.17の改善・利用手順・実機確認: [Issue #5 — Live Coach・ボール/Hoop表示・録画・レビュー](docs/issue-5-live-coach-ux.md)。
 
 新機能の利用手順・計算定義: [Session Report / My Progress / 全体フィードバック](docs/issue-3-session-report-progress.md)。
