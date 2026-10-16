@@ -47,7 +47,10 @@ export function motionSignals(a,b,maxGap=.25){
   return {wristVelocity,elbowVelocity,elbowChange,strength:Math.max(0,elbowVelocity)/180+Math.max(0,wristVelocity)*.3,qualifies:b.wristHeight>=-.4&&(wristVelocity>=.2||elbowChange>=3)};
 }
 export function shotCandidates(frames,hand,aspect,range,includePose=false){
-  const rows=frames.map(f=>row(f,hand,aspect)).filter(Boolean);
+  return shotCandidatesFromRows(shotMotionRows(frames,hand,aspect),range,includePose,frames.filter(f=>f.ball).length);
+}
+// Shared row-based entry keeps offline replay bounded without retaining every landmark object.
+export function shotCandidatesFromRows(rows,range,includePose=false,ballTrackedFrames=0){
   const candidates=[];
   for(let i=2;i<rows.length-1;i++){
     const contact=rows[i-1],before=rows[i-2],away=rows[i],next=rows[i+1];
@@ -66,7 +69,7 @@ export function shotCandidates(frames,hand,aspect,range,includePose=false){
   }
   const poseCandidates=[];
   if(candidates.length&&!includePose){
-    return candidates.map(selected=>({...selected,candidateCount:candidates.length,ballTrackedFrames:frames.filter(f=>f.ball).length}));
+    return candidates.map(selected=>({...selected,candidateCount:candidates.length,ballTrackedFrames}));
   }
   for(let i=1;i<rows.length;i++){
     const a=rows[i-1],b=rows[i],signal=motionSignals(a,b,includePose?.6:.25);
@@ -75,7 +78,7 @@ export function shotCandidates(frames,hand,aspect,range,includePose=false){
     const release=Math.min(range.end-0.01,b.time+0.08),phases=boundaries(rows,release,range);
     if(phases)poseCandidates.push({phases,strength,motionTime:b.time});
   }
-  return [...candidates,...poseCandidates.map(best=>({...best,source:'pose',confidence:'Low',releaseWindow:null,candidateCount:0,ballTrackedFrames:frames.filter(f=>f.ball).length,reason:'ボール離れを確認できないため、手首の上昇と肘の伸展が大きい場面からリリースを推定しました。'}))];
+  return [...candidates,...poseCandidates.map(best=>({...best,source:'pose',confidence:'Low',releaseWindow:null,candidateCount:0,ballTrackedFrames,reason:'ボール離れを確認できないため、手首の上昇と肘の伸展が大きい場面からリリースを推定しました。'}))];
 }
 export function detectShotPhases(frames,hand,aspect,range){
   const candidates=shotCandidates(frames,hand,aspect,range);
