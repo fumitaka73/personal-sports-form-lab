@@ -58,6 +58,10 @@ export function unpackOfflineFrames(buffer) {
   }
   return frames;
 }
+// Human truth is asset-wide: confirmed labels remain valid across reanalysis runs.
+export function annotationConflict(annotations, time, ignoredId) {
+  return activeLabels(annotations).find(i=>i.id!==ignoredId && Math.abs(i.time-time)<0.5) ?? null;
+}
 export function changeAnnotations(
   previous,
   action,
@@ -72,7 +76,7 @@ export function changeAnnotations(
     const time = Number(action.time);
     if (!Number.isFinite(time) || time < 0 || time > duration)
       throw new Error('動画の範囲内でリリースの瞬間を指定してください。');
-    const near = activeLabels(next).find((i) => i.id !== action.id && Math.abs(i.time - time) < 0.5);
+    const near = annotationConflict(next,time,action.id);
     if (near) {
       const position = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`;
       throw new Error(`追加・修正する位置 ${position(time)} の近くに、確認済みのシュート ${position(near.time)} があります（差 ${Math.abs(near.time - time).toFixed(2)}秒・0.5秒未満）。同じシュートなら登録済みマーカーを選び「位置を修正」を使ってください。`);

@@ -40,3 +40,22 @@ test('close timeline markers share one finger-sized group; separate positions an
   assert.deepEqual(entries.map(i=>i.id),['b','c','a']);
   assert.deepEqual(groupTimelineMarkers([],145,0),[]);
 });
+
+test('position diagnostic distinguishes requested, pending, actual media and displayed positions without changing the video',()=>{
+ let actual=20;
+ const video={get currentTime(){return actual;},set currentTime(t){},readyState:2,seeking:false,pause(){}};
+ const p=createOfflinePosition(video,()=>145);
+ p.seek(30);
+ assert.deepEqual(p.snapshot(),{mediaTime:20,displayTime:30,pendingTarget:30,lastSeekTarget:30,seeking:false,readyState:2});
+ actual=30;p.settle();
+ assert.deepEqual(p.snapshot(),{mediaTime:30,displayTime:30,pendingTarget:null,lastSeekTarget:30,seeking:false,readyState:2});
+ p.reset();assert.equal(p.snapshot().lastSeekTarget,null);
+});
+
+test('selected marker stays at its own release and its finger target does not cover a separate group',()=>{
+ const entries=[{key:'a',time:1},{key:'selected',time:20},{key:'b',time:30},{key:'c',time:70}];
+ const groups=groupTimelineMarkers(entries,145,240,'selected');
+ assert.deepEqual(groups.map(g=>g.map(e=>e.key)),[['a','selected','b'],['c']]);
+ const anchors=groups.map(g=>(g.find(e=>e.key==='selected')??g[0]).time);
+ assert.equal(anchors[0],20);assert.ok((anchors[1]-anchors[0])/145*240>=44);
+});

@@ -268,3 +268,21 @@ test('0.5-second proximity guard uses only active final truth, reports both medi
   // An unconfirmed automatic candidate is not a duplicate manual truth.
   assert.equal(annotationCounts(a,{id:'r',shots:[{id:'auto',phases:{release:1}}]}).automatic,1);
 });
+
+test('separated releases are not duplicates of cancelled labels or unconfirmed candidates; final truth remains asset-wide across runs', async()=>{
+ const {annotationConflict}=await import('../src/offline-data.js');
+ let a=emptyAnnotations(assetId);
+ a=changeAnnotations(a,{type:'add',time:20,origin:'auto-confirmed',runId:'previous-run',shotId:'old-shot'},{id:'confirmed-old-run',duration:145});
+ assert.equal(annotationConflict(a,30),null);
+ assert.equal(annotationConflict(a,20)?.id,'confirmed-old-run');
+ assert.equal(annotationConflict(a,20,'confirmed-old-run'),null);
+ a=changeAnnotations(a,{type:'edit',id:'confirmed-old-run',active:false},{duration:145});
+ assert.equal(annotationConflict(a,20),null);
+ for(const [index,time]of [4,18,32,46,60,74,88,102,116,130].entries())
+  a=changeAnnotations(a,{type:'add',time},{id:'separate-'+index,duration:145});
+ assert.equal(activeLabels(a).length,10);
+ assert.equal(a.items.filter(i=>i.active===false).length,1);
+ assert.equal(a.history.length,12);
+ assert.equal(annotationConflict(a,90),null); // mere automatic candidates are not in final truth
+ assert.throws(()=>changeAnnotations(a,{type:'add',time:88},{duration:145}),/0:28|1:28/);
+});
